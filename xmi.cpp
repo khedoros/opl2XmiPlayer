@@ -158,6 +158,17 @@ bool xmi::load_events(binifstream &in) {
                 //cout<<"Note off (note: "<<int(note)<<" velocity: "<<int(velocity)<<" at "<<dec<<note_off_time<<")"<<endl;
                 events.push_back(midi_event(note_off_time, data));
                 break;
+            case 0xa0: // Key Pressure / Aftertouch
+                in>>note>>velocity;
+                //cout<<hex<<"Note aftertouch (channel: "<<(event&0x0f)<<" note: "<<int(note)<<" velocity: "<<int(velocity)<<" at "<<dec<<curtime<<")"<<endl;
+                data.push_back(note);
+                data.push_back(velocity);
+                events.push_back(midi_event(curtime, data));
+                data[0] -= 0x20;
+                note_off_time = curtime + midi_event::vlq2int(in);
+                //cout<<"Note off (note: "<<int(note)<<" velocity: "<<int(velocity)<<" at "<<dec<<note_off_time<<")"<<endl;
+                events.push_back(midi_event(note_off_time, data));
+                break;
             case 0xb0: //CTRL_CHANGE
                 in>>controller>>value;
                 //cout<<"Control change ("<<hex<<int(controller)<<" = "<<int(value)<<")"<<endl;

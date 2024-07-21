@@ -231,7 +231,7 @@ class AudioOut: public sf::SoundStream {
 
 int main(int argc, char* argv[]) {
     //Load the patch data
-    bool success = uwpf.load("uw.ad");
+    bool success = uwpf.load("sample.opl");
     if(!success) {
         cout<<"Couldn't load the patch file. Aborting."<<endl;
     }
