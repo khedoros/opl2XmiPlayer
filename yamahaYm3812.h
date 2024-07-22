@@ -77,7 +77,7 @@ private:
         unsigned releaseRate:4;
 
         //reg e0
-        unsigned wave:2;
+        unsigned waveform:2;
     };
 
     enum connectionType {
@@ -86,7 +86,7 @@ private:
     };
 
     struct chan_t {
-        unsigned int fNum; // 2nd of 3 elements that define the frequency
+        unsigned fNum: 10; // 2nd of 3 elements that define the frequency
         bool keyOn; //on-off state of the key
         unsigned int octave; //3rd element that defines the frequency
         unsigned feedbackLevel: 3; // feedback level of first slot

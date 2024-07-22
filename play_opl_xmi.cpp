@@ -176,7 +176,7 @@ bool copy_patch(uint8_t voice, uint8_t bank, uint8_t patch) {
                                                  ((pat.mod_sustain_lvl&0xf)<<(4)));
             opl->WriteReg(voice_base[voice]+0xc0,(pat.connection&1) +
                                                  ((pat.feedback&7)<<(1)));
-            opl->WriteReg(voice_base[voice]+0xe0,(pat.mod_waveform&7));
+            opl->WriteReg(voice_base[voice]+0xe0,(pat.mod_waveform&3));
 
             //Write the values to the carrier:
             opl->WriteReg(voice_base[voice]+0x23,(pat.car_freq_mult&0x0f) +
@@ -192,7 +192,7 @@ bool copy_patch(uint8_t voice, uint8_t bank, uint8_t patch) {
                                                  ((pat.car_sustain_lvl&0xf)<<(4)));
             opl->WriteReg(voice_base[voice]+0xc3,(pat.connection&0x7)+
                                                  ((pat.feedback&0x7)<<(1)));
-            opl->WriteReg(voice_base[voice]+0xe3,(pat.car_waveform&7));
+            opl->WriteReg(voice_base[voice]+0xe3,(pat.car_waveform&3));
             return true;
         }
     }

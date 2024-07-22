@@ -30,11 +30,13 @@ void YamahaYm3812::Reset() {
         chan[ch].carOp.amPhase = 0;
         chan[ch].carOp.vibPhase = 0;
 
-        chan[ch].fNum = 0;
-        chan[ch].modOp.releaseSustain = false;
-        chan[ch].modOp.releaseSustain = false;
         chan[ch].keyOn = false;
+        chan[ch].fNum = 0;
         chan[ch].octave = 0;
+        chan[ch].feedbackLevel = 0;
+        chan[ch].modOp.releaseSustain = false;
+        chan[ch].modOp.releaseSustain = false;
+
     }
 }
 
@@ -65,7 +67,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
 
         if(chNum == -1) return; // invalid channel number; ignore the write
 
-        op_t& op = (type == MOD) ? chan[chNum].modOp : chan[chNum].carOp;
+        op_t& op = (type == slotType::MOD) ? chan[chNum].modOp : chan[chNum].carOp;
         
         switch(reg & 0xe0) {
             case 0x20:
@@ -74,6 +76,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 op.sustain = static_cast<bool>(val & 0x20);
                 op.keyScaleRate = static_cast<bool>(val & 0x10);
                 op.freqMult = (val & 0x0f);
+                op.phaseInc = (((chan[chNum].fNum * multVal[op.freqMult]) << chan[chNum].octave) * 44100) / 49716;
                 break;
             case 0x40:
                 op.keyScaleLevel = (val >> 6);
@@ -88,7 +91,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 op.releaseRate = (val & 0x0f);
                 break;
             case 0xe0:
-                op.wave = (val & 0x03);
+                op.waveform = (val & 0x03);
                 break;
         }
     }
@@ -146,7 +149,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 chan[chNum].modOp.phaseInc = (((chan[chNum].fNum * multVal[chan[chNum].modOp.freqMult]) << chan[chNum].octave) * 44100) / 49716;
                 chan[chNum].carOp.phaseInc = (((chan[chNum].fNum * multVal[chan[chNum].carOp.freqMult]) << chan[chNum].octave) * 44100) / 49716;
                 {
-                    bool newKeyOn = static_cast<bool>((val>>5) & 0x01);
+                    bool newKeyOn = static_cast<bool>(val & 0x20);
                     if(chan[chNum].keyOn && !newKeyOn) { // keyOff event
                         printf("APU::YM3812 melody chan %d key-off\n", chNum);
                         chan[chNum].modOp.envPhase = adsrPhase::release;
@@ -176,7 +179,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 break;
             case 0xc0:
                 chan[chNum].conn = static_cast<connectionType>(val & 0x01);
-                chan[chNum].feedbackLevel = (val >> 1);
+                chan[chNum].feedbackLevel = ((val >> 1) & 0x07);
                 break;
         }
     }
@@ -191,49 +194,49 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
 
         int chanMax = (rhythmMode)?6:9;
         for(int ch=0;ch<chanMax;ch++) {
-            op_t * modOp = &(chan[ch].modOp);
-            op_t * carOp = &(chan[ch].carOp);
-            modOp->updateEnvelope(envCounter);
-            carOp->updateEnvelope(envCounter);
-            if(chan[ch].carOp.envPhase != silent) {
-                modOp->phaseCnt += modOp->phaseInc;
-                int feedback = (chan[ch].feedbackLevel) ? ((modOp->modFB1 + modOp->modFB2) >> (8 - chan[ch].feedbackLevel)) : 0;
-                carOp->phaseCnt += carOp->phaseInc;
-                int modSin = lookupSin((modOp->phaseCnt / 512) -1 +                              // phase
-                                       (modOp->vibPhase) +                                       // modification for vibrato
+            op_t& modOp = chan[ch].modOp;
+            op_t& carOp = chan[ch].carOp;
+            modOp.updateEnvelope(envCounter);
+            carOp.updateEnvelope(envCounter);
+            if(carOp.envPhase != adsrPhase::silent) {
+                modOp.phaseCnt += modOp.phaseInc;
+                int feedback = (chan[ch].feedbackLevel) ? ((modOp.modFB1 + modOp.modFB2) >> (8 - chan[ch].feedbackLevel)) : 0;
+                carOp.phaseCnt += carOp.phaseInc;
+                int modSin = lookupSin((modOp.phaseCnt / 1024) -1 +                              // phase
+                                       (modOp.vibPhase) +                                       // modification for vibrato
                                        (feedback),                                               // modification for feedback
-                                       modOp->wave);
+                                       modOp.waveform);
 
                 int modOut = lookupExp((modSin) +                                                // sine input
-                                       (modOp->amPhase * 0x10) +                                 // AM volume attenuation (tremolo)
-                                       (modOp->envLevel * 0x10) +                                // Envelope
+                                       (modOp.amPhase * 0x10) +                                 // AM volume attenuation (tremolo)
+                                       (modOp.envLevel * 0x10) +                                // Envelope
                                        //TODO: KSL
-                                       (modOp->totalLevel * 0x20)) /*>> 1*/;                         // Modulator volume
-                modOp->modFB1 = modOp->modFB2;
-                modOp->modFB2 = modOut;
+                                       (modOp.totalLevel * 0x20));                         // Modulator volume
+                modOp.modFB1 = modOp.modFB2;
+                modOp.modFB2 = modOut;
 
                 if(chan[ch].conn == connectionType::fm) {
-                    int carSin = lookupSin((carOp->phaseCnt / 512) +                                 // phase
-                                        (2 * modOut) +                                            // fm modulation
-                                        (carOp->vibPhase),                                        // modification for vibrato
-                                        carOp->wave);
+                    int carSin = lookupSin((carOp.phaseCnt / 1024) +                                 // phase
+                                        (modOut) +                                            // fm modulation
+                                        (carOp.vibPhase),                                        // modification for vibrato
+                                        carOp.waveform);
 
                     buffer[i]+=lookupExp((carSin) +                                                  // sine input
-                                        (carOp->amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
-                                        (carOp->envLevel * 0x10) +                                  // Envelope
+                                        (carOp.amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
+                                        (carOp.envLevel * 0x10) +                                  // Envelope
                                         //TODO: KSL
-                                        (carOp->totalLevel * 0x20)) & 0xfff0;                         // Channel volume
+                                        (carOp.totalLevel * 0x20)) & 0xfff0;                         // Channel volume
                 }
                 else {
-                    int carSin = lookupSin((carOp->phaseCnt / 512) +                                 // phase
-                                        (carOp->vibPhase),                                        // modification for vibrato
-                                        carOp->wave);
+                    int carSin = lookupSin((carOp.phaseCnt / 1024) +                                 // phase
+                                        (carOp.vibPhase),                                        // modification for vibrato
+                                        carOp.waveform);
 
                     buffer[i]+=lookupExp((carSin) +                                                  // sine input
-                                        (carOp->amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
-                                        (carOp->envLevel * 0x10) +                                  // Envelope
+                                        (carOp.amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
+                                        (carOp.envLevel * 0x10) +                                  // Envelope
                                         //TODO: KSL
-                                        (carOp->totalLevel * 0x20)) & 0xfff0;                         // Channel volume
+                                        (carOp.totalLevel * 0x20)) & 0xfff0;                         // Channel volume
                     buffer[i] += modOut;
                 }
             }
@@ -241,8 +244,8 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
         buffer[i+1] = buffer[i];
         if(rhythmMode) { // TODO: handle the 5 rhythm instruments (correctly)
             for(int ch = 0; ch < 5; ch++) {
-                op_t * modOp = percChan[ch].modOp;
-                op_t * carOp = percChan[ch].carOp;
+                op_t* modOp = percChan[ch].modOp;
+                op_t* carOp = percChan[ch].carOp;
                 if(modOp) {
                     modOp->updateEnvelope(envCounter);
                 }
@@ -253,10 +256,10 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                     if(modOp) {
                         int feedback = (percChan[ch].chan->feedbackLevel) ? ((modOp->modFB1 + modOp->modFB2) >> (8 - percChan[ch].chan->feedbackLevel)) : 0;
                         modOp->phaseCnt += modOp->phaseInc;
-                        int modSin = lookupSin((modOp->phaseCnt / 512) - 1 +                         // phase
+                        int modSin = lookupSin((modOp->phaseCnt / 1024) - 1 +                         // phase
                                                (modOp->vibPhase) +                                   // modification for vibrato
                                                (feedback),                                           // modification for feedback
-                                               modOp->wave);
+                                               modOp->waveform);
 
                         modOut = lookupExp((modSin) +                                                // sine input
                                            (modOp->amPhase * 0x10) +                                 // AM volume attenuation (tremolo)
@@ -267,10 +270,10 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                         modOp->modFB2 = modOut;
 
                     }
-                    int carSin = lookupSin((carOp->phaseCnt / 512) +                                 // phase
+                    int carSin = lookupSin((carOp->phaseCnt / 1024) +                                 // phase
                                            (2 * modOut) +                                            // fm modulation
                                            (carOp->vibPhase),                                        // modification for vibrato
-                                           carOp->wave);
+                                           carOp->waveform);
 
                     buffer[i]+= lookupExp((carSin) +                                                 // sine input
                                          (carOp->amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
@@ -298,17 +301,21 @@ int YamahaYm3812::lookupSin(int val, int wf) {
     int result = logsinTable[mirror ? val ^ 255 : val];
     switch(wf) {
         case 0: // full sine wave
+            if(sign) result |= 0x8000;
             break;
         case 1: // half sine wave
             if(sign) {
-                result = 0xfff;
-                result |= 0x8000;
+                result = 0;
+                //result |= 0x8000;
             }
             break;
         // TODO: re-read what the sine wave format is and how I'd represent it here
         case 2: // rectified sine wave (double-bumps)
             break;
         case 3: // rectified sine wave, rises only
+            if(mirror) {
+                result = 0;
+            }
             break;
     }
     return result;
@@ -316,10 +323,11 @@ int YamahaYm3812::lookupSin(int val, int wf) {
 
 int YamahaYm3812::lookupExp(int val) {
     bool sign = val & 0x8000;
-    int t = (expTable[(val & 255) ^ 255] << 1) | 0x800;
+    // int t = (expTable[(val & 255) ^ 255] << 1) | 0x800;
+    int t = (expTable[(val & 255) ^ 255] | 1024) << 1;
     int result = t >> ((val & 0x7F00) >> 8);
     if (sign) result = ~result;
-    return result;
+    return result >> 2;
 }
 
 int YamahaYm3812::logsinTable[256];
