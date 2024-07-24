@@ -40,7 +40,7 @@ private:
     struct op_t {
         void updateEnvelope(unsigned int envCounter);
         unsigned phaseInc:20;    // Basically the frequency, generated from the instrument's mult, and the fNum and octave/block for the channel
-        unsigned phaseCnt:20;    // Current place in the sine phase. 10.9 fixed-point number, where the whole selects the sine sample to use
+        unsigned phaseCnt:20;    // Current place in the sine phase. 10.10 fixed-point number, where the whole selects the sine sample to use
 
         // TODO: AM/tremolo state. amPhase is a placeholder.
         unsigned amPhase:4;
@@ -49,8 +49,8 @@ private:
         unsigned vibPhase:4;
 
         // TODO: Modulator feedback state.
-        unsigned int modFB1;
-        unsigned int modFB2;
+        int modFB1;
+        int modFB2;
 
         bool releaseSustain;   //1=key-off has release-rate at 5, 0=key-off has release rate at 7 (both with KSR adjustment)
 
@@ -126,7 +126,10 @@ private:
     static int logsinTable[256];
     static int expTable[256];
 
+    static const int NATIVE_SAMPLE_RATE;
+
     void initTables();
     int lookupSin(int val, int waveForm);
     int lookupExp(int val);
+    int convertWavelength(int wavelength);
 };

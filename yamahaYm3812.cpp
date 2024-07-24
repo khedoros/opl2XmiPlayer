@@ -11,8 +11,15 @@ OPLEmul *YamahaYm3812Create(bool stereo)
 }
 
 void YamahaYm3812::Reset() {
+    for(int addr=0;addr<255;addr++) {
+        if(addr >= 0x40 && addr < 0x60) {
+            WriteReg(addr,0x3f);
+        }
+        else {
+            WriteReg(addr, 0);
+        }
+    }
     for(int ch = 0; ch < 9; ch++) {
-        chan[ch].modOp.totalLevel = 63;
         chan[ch].modOp.phaseInc = 0;
         chan[ch].modOp.phaseCnt = 0;
         chan[ch].modOp.envPhase = adsrPhase::silent;
@@ -22,21 +29,12 @@ void YamahaYm3812::Reset() {
         chan[ch].modOp.modFB1 = 0;
         chan[ch].modOp.modFB2 = 0;
 
-        chan[ch].carOp.totalLevel = 63;
         chan[ch].carOp.phaseInc = 0;
         chan[ch].carOp.phaseCnt = 0;
         chan[ch].carOp.envPhase = adsrPhase::silent;
         chan[ch].carOp.envLevel = 127;
         chan[ch].carOp.amPhase = 0;
         chan[ch].carOp.vibPhase = 0;
-
-        chan[ch].keyOn = false;
-        chan[ch].fNum = 0;
-        chan[ch].octave = 0;
-        chan[ch].feedbackLevel = 0;
-        chan[ch].modOp.releaseSustain = false;
-        chan[ch].modOp.releaseSustain = false;
-
     }
 }
 
@@ -76,7 +74,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 op.sustain = static_cast<bool>(val & 0x20);
                 op.keyScaleRate = static_cast<bool>(val & 0x10);
                 op.freqMult = (val & 0x0f);
-                op.phaseInc = (((chan[chNum].fNum * multVal[op.freqMult]) << chan[chNum].octave) * 44100) / 49716;
+                op.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[op.freqMult]) << chan[chNum].octave));
                 break;
             case 0x40:
                 op.keyScaleLevel = (val >> 6);
@@ -139,15 +137,15 @@ void YamahaYm3812::WriteReg(int reg, int val) {
             case 0xa0:
                 chan[chNum].fNum &= 0x300;
                 chan[chNum].fNum |= val;
-                chan[chNum].modOp.phaseInc = (((chan[chNum].fNum * multVal[chan[chNum].modOp.freqMult]) << chan[chNum].octave) * 44100) / 49716;
-                chan[chNum].carOp.phaseInc = (((chan[chNum].fNum * multVal[chan[chNum].carOp.freqMult]) << chan[chNum].octave) * 44100) / 49716;
+                chan[chNum].modOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].modOp.freqMult]) << chan[chNum].octave));
+                chan[chNum].carOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].carOp.freqMult]) << chan[chNum].octave));
                 break;
             case 0xb0:
                 chan[chNum].fNum &= 0xff;
                 chan[chNum].fNum |= ((val&0x03)<<8);
                 chan[chNum].octave = ((val>>2) & 0x07);
-                chan[chNum].modOp.phaseInc = (((chan[chNum].fNum * multVal[chan[chNum].modOp.freqMult]) << chan[chNum].octave) * 44100) / 49716;
-                chan[chNum].carOp.phaseInc = (((chan[chNum].fNum * multVal[chan[chNum].carOp.freqMult]) << chan[chNum].octave) * 44100) / 49716;
+                chan[chNum].modOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].modOp.freqMult]) << chan[chNum].octave));
+                chan[chNum].carOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].carOp.freqMult]) << chan[chNum].octave));
                 {
                     bool newKeyOn = static_cast<bool>(val & 0x20);
                     if(chan[chNum].keyOn && !newKeyOn) { // keyOff event
@@ -189,7 +187,7 @@ void YamahaYm3812::SetPanning(int channel, float left, float right) {}
 void YamahaYm3812::Update(float* buffer, int sampleCnt) {}
 
 void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
-    for(int i=0;i<sampleCnt;i+=2) {
+    for(int i=0;i<sampleCnt*2;i+=2) {
         envCounter+=16;
 
         int chanMax = (rhythmMode)?6:9;
@@ -198,13 +196,15 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
             op_t& carOp = chan[ch].carOp;
             modOp.updateEnvelope(envCounter);
             carOp.updateEnvelope(envCounter);
+
             if(carOp.envPhase != adsrPhase::silent) {
                 modOp.phaseCnt += modOp.phaseInc;
                 int feedback = (chan[ch].feedbackLevel) ? ((modOp.modFB1 + modOp.modFB2) >> (8 - chan[ch].feedbackLevel)) : 0;
                 carOp.phaseCnt += carOp.phaseInc;
-                int modSin = lookupSin((modOp.phaseCnt / 1024) -1 +                              // phase
+
+                int modSin = lookupSin((modOp.phaseCnt / 1024) - 1 +                              // phase
                                        (modOp.vibPhase) +                                       // modification for vibrato
-                                       (feedback),                                               // modification for feedback
+                                       (feedback) / 1024,                                               // modification for feedback
                                        modOp.waveform);
 
                 int modOut = lookupExp((modSin) +                                                // sine input
@@ -216,9 +216,9 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                 modOp.modFB2 = modOut;
 
                 if(chan[ch].conn == connectionType::fm) {
-                    int carSin = lookupSin((carOp.phaseCnt / 1024) +                                 // phase
+                    int carSin = lookupSin((carOp.phaseCnt  / 1024) +                                 // phase
                                         (modOut) +                                            // fm modulation
-                                        (carOp.vibPhase),                                        // modification for vibrato
+                                        (carOp.vibPhase) / 1024,                                        // modification for vibrato
                                         carOp.waveform);
 
                     buffer[i]+=lookupExp((carSin) +                                                  // sine input
@@ -303,18 +303,19 @@ int YamahaYm3812::lookupSin(int val, int wf) {
         case 0: // full sine wave
             if(sign) result |= 0x8000;
             break;
-        case 1: // half sine wave
+        case 1: // half sine wave (positive half, set negative half to 0)
             if(sign) {
                 result = 0;
-                //result |= 0x8000;
+                result |= 0x8000; // vague memory that it uses -0, not +0
             }
             break;
-        // TODO: re-read what the sine wave format is and how I'd represent it here
         case 2: // rectified sine wave (double-bumps)
+            // Just don't set the sign negative for anything
             break;
         case 3: // rectified sine wave, rises only
             if(mirror) {
                 result = 0;
+                result |= 0x8000; // vague memory that it uses -0, not +0
             }
             break;
     }
@@ -325,13 +326,19 @@ int YamahaYm3812::lookupExp(int val) {
     bool sign = val & 0x8000;
     // int t = (expTable[(val & 255) ^ 255] << 1) | 0x800;
     int t = (expTable[(val & 255) ^ 255] | 1024) << 1;
-    int result = t >> ((val & 0x7F00) >> 8);
+    int result = (t >> ((val & 0x7F00) >> 8)) >> 2;
     if (sign) result = ~result;
-    return result >> 2;
+    // std::cout<<"EXPOUT "<<result<<'\n';
+    return result;
+}
+
+int YamahaYm3812::convertWavelength(int wavelength) {
+    return (wavelength * OPL_SAMPLE_RATE) / NATIVE_SAMPLE_RATE;
 }
 
 int YamahaYm3812::logsinTable[256];
 int YamahaYm3812::expTable[256];
+const int YamahaYm3812::NATIVE_SAMPLE_RATE = 49716;
 
 const std::string YamahaYm3812::rhythmNames[] {"Bass Drum", "High Hat", 
                                                "Snare Drum", "Tom-tom", "Top Cymbal"};
@@ -351,11 +358,11 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter) {
         envPhase = adsrPhase::silent;
     }
 
-    unsigned int activeRate = 0;
+    int activeRate = 0;
     switch(envPhase) {
         case adsrPhase::silent: activeRate = 0; break;
         case adsrPhase::dampen: activeRate = 12; break;
-        case adsrPhase::attack: activeRate = attackRate; break;
+        case adsrPhase::attack: activeRate = -attackRate; break;
         case adsrPhase::decay:  activeRate = decayRate; break;
         case adsrPhase::sustain: activeRate = 0; break;
         case adsrPhase::sustainRelease: activeRate = releaseRate; break;
@@ -364,17 +371,17 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter) {
             else        activeRate = 7;
             break;
         default: activeRate = 0;
-                 std::cout<<"Unhandled envPhase: "<<envPhase<<"\n";
-                 break;
+            std::cout<<"Unhandled envPhase: "<<envPhase<<"\n";
+            break;
     }
 
     int changeAmount = 1;
     if(envPhase == adsrPhase::attack) {
-        if(activeRate == 15) {
+        if(activeRate == -15) {
             envLevel = 0;
         }
         else {
-            envLevel += ~envLevel >> 2;
+            envLevel += activeRate;
         }
     }
     else if(activeRate == 0) changeAmount = 0;
