@@ -188,7 +188,7 @@ void YamahaYm3812::Update(float* buffer, int sampleCnt) {}
 
 void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
     for(int i=0;i<sampleCnt*2;i+=2) {
-        envCounter+=16;
+        envCounter+=2;
 
         int chanMax = (rhythmMode)?6:9;
         for(int ch=0;ch<chanMax;ch++) {
@@ -204,7 +204,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
 
                 int modSin = lookupSin((modOp.phaseCnt / 1024) - 1 +                              // phase
                                        (modOp.vibPhase) +                                       // modification for vibrato
-                                       (feedback) / 1024,                                               // modification for feedback
+                                       (feedback),                                               // modification for feedback
                                        modOp.waveform);
 
                 int modOut = lookupExp((modSin) +                                                // sine input
@@ -217,15 +217,15 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
 
                 if(chan[ch].conn == connectionType::fm) {
                     int carSin = lookupSin((carOp.phaseCnt  / 1024) +                                 // phase
-                                        (modOut) +                                            // fm modulation
-                                        (carOp.vibPhase) / 1024,                                        // modification for vibrato
+                                        (carOp.vibPhase) +                                    // modification for vibrato
+                                        (modOut),                                             // fm modulation
                                         carOp.waveform);
 
                     buffer[i]+=lookupExp((carSin) +                                                  // sine input
                                         (carOp.amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
                                         (carOp.envLevel * 0x10) +                                  // Envelope
                                         //TODO: KSL
-                                        (carOp.totalLevel * 0x20)) & 0xfff0;                         // Channel volume
+                                        (carOp.totalLevel * 0x20));                         // Channel volume
                 }
                 else {
                     int carSin = lookupSin((carOp.phaseCnt / 1024) +                                 // phase
@@ -236,7 +236,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                                         (carOp.amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
                                         (carOp.envLevel * 0x10) +                                  // Envelope
                                         //TODO: KSL
-                                        (carOp.totalLevel * 0x20)) & 0xfff0;                         // Channel volume
+                                        (carOp.totalLevel * 0x20));                                // Channel volume
                     buffer[i] += modOut;
                 }
             }
@@ -265,7 +265,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                                            (modOp->amPhase * 0x10) +                                 // AM volume attenuation (tremolo)
                                            (modOp->envLevel * 0x10) +                                // Envelope
                                            //TODO: KSL
-                                           (modOp->totalLevel * 0x20)) >> 1;                         // Modulator volume
+                                           (modOp->totalLevel * 0x20));                              // Modulator volume
                         modOp->modFB1 = modOp->modFB2;
                         modOp->modFB2 = modOut;
 
@@ -279,7 +279,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                                          (carOp->amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
                                          (carOp->envLevel * 0x10) +                                  // Envelope
                                          //TODO: KSL
-                                         (percChan[ch].carOp->totalLevel * 0x80)) & 0xfff0;          // Channel volume
+                                         (percChan[ch].carOp->totalLevel * 0x20));                   // Channel volume
                 }
             }
             buffer[i+1] = buffer[i];
@@ -402,3 +402,10 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter) {
     if(envLevel > 130) envLevel = 0; // assume wrap-around
     else if(envLevel > 127) envLevel = 127; //assume it just overflowed the 7-bit value
 }
+
+int YamahaYm3812::op_t::lfsrStepGalois() {
+    bool output = galoisState & 1;
+    galoisState >>= 1;
+    if (output) galoisState ^= 0x400181;
+    return output;
+} 

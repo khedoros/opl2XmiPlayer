@@ -39,6 +39,7 @@ private:
 
     struct op_t {
         void updateEnvelope(unsigned int envCounter);
+        int lfsrStepGalois();
         unsigned phaseInc:20;    // Basically the frequency, generated from the instrument's mult, and the fNum and octave/block for the channel
         unsigned phaseCnt:20;    // Current place in the sine phase. 10.10 fixed-point number, where the whole selects the sine sample to use
 
@@ -78,6 +79,8 @@ private:
 
         //reg e0
         unsigned waveform:2;
+
+        uint32_t galoisState; // LFSR state for the rhythem channels
     };
 
     enum connectionType {
