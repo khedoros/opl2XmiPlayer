@@ -384,9 +384,11 @@ int main(int argc, char* argv[]) {
             channel = e->get_channel();
             v = e->get_data();
             if(meta == 0x07) { //Volume change
+                channel_volume[channel] = v[2];
                 for(int i=0;i<18;++i) {
-                    if(opl_channel_assignment[i] == channel)
-                        opl->WriteReg(voice_base[i] + 0x40 + 3, 63 - (uint8_t((float(channel_volume[channel])/MIDI_MAX_VAL) * (v[2] / 2))));
+                    if(opl_channel_assignment[i] == channel) {
+                        opl->WriteReg(voice_base[i] + 0x40 + 3, 63 - (channel_volume[channel] >> 1));
+                    }
                 }
             }
             else if(meta == 0x0a) { //Panning controll
@@ -458,11 +460,11 @@ int main(int argc, char* argv[]) {
                 return 0;
             }
             else {
-                cout<<"Ignoring meta command"<<endl;
+                cout<<"Ignoring meta command"<<std::hex<<"0x"<<meta<<endl;
             }
             break;
         case midi_event::PITCH_WHEEL: //0xe0
-            cout<<"Don't want to do the pitch wheel, so I didn't."<<endl;
+            cout<<"Don't want to do the pitch wheel, so I didn't. (value: "<<std::hex<<int(v[0])<<" "<<int(v[1])<<" "<<int(v[2])<<")"<<endl;
             break;
         default:
             cout<<"Not implemented, yet: ";
