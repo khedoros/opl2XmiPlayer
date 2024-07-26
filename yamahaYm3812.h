@@ -1,6 +1,7 @@
 #pragma once
 #include<utility>
 #include<string>
+#include<array>
 #include "opl.h"
 
 OPLEmul* YamahaYm3812Create(bool stereo);
@@ -22,8 +23,8 @@ private:
     float leftPan;
     float rightPan;
 
-    bool deepTremolo;
-    bool deepVibrato;
+    int tremoloMultiplier; // 1dB when false (add range of 0->43?), 4.8dB when true (0->205?)
+    int vibratoMultiplier; // 7 cent when false, 14 cent when true
 
     unsigned int envCounter; // Global counter for advancing envelope state
 
@@ -37,17 +38,31 @@ private:
         release         //key-off
     };
 
+    static const std::array<uint8_t, 16> multVal;
+    static const std::array<std::string,5> rhythmNames;
+    static std::array<int,256> logsinTable;
+    static std::array<int,256> expTable;
+    static const std::array<int,210> amTable;
+    static const std::array<std::array<int,8>,8> fmTable;
+    static const int NATIVE_SAMPLE_RATE = 49716;
+
+    void initTables();
+    int lookupSin(int val, int waveForm);
+    int lookupExp(int val);
+    int convertWavelength(int wavelength);
+
     struct op_t {
         void updateEnvelope(unsigned int envCounter);
         int lfsrStepGalois();
         unsigned phaseInc:20;    // Basically the frequency, generated from the instrument's mult, and the fNum and octave/block for the channel
         unsigned phaseCnt:20;    // Current place in the sine phase. 10.10 fixed-point number, where the whole selects the sine sample to use
 
-        // TODO: AM/tremolo state. amPhase is a placeholder.
-        unsigned amPhase:4;
+        int amPhase; // index into the amTable, for how deep to currently apply the AM value
+        static const int amPhaseSampleLength = (OPL_SAMPLE_RATE * 64) / NATIVE_SAMPLE_RATE; // Number of samples between progressing to a new index
 
         // TODO: FM/vibrato state. vibPhase is a placeholder.
-        unsigned vibPhase:4;
+        int fmPhase;
+        static const int fmPhaseSampleLength = (OPL_SAMPLE_RATE * 1024) / NATIVE_SAMPLE_RATE;
 
         // TODO: Modulator feedback state.
         int modFB1;
@@ -121,18 +136,4 @@ private:
         tomTom,
         topCymbal
     };
-
-    static constexpr uint8_t multVal[16] = {1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20, 24, 24, 30, 30};
-
-    static const std::string rhythmNames[];
-
-    static int logsinTable[256];
-    static int expTable[256];
-
-    static const int NATIVE_SAMPLE_RATE;
-
-    void initTables();
-    int lookupSin(int val, int waveForm);
-    int lookupExp(int val);
-    int convertWavelength(int wavelength);
 };

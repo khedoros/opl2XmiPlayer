@@ -25,7 +25,7 @@ void YamahaYm3812::Reset() {
         chan[ch].modOp.envPhase = adsrPhase::silent;
         chan[ch].modOp.envLevel = 127;
         chan[ch].modOp.amPhase = 0;
-        chan[ch].modOp.vibPhase = 0;
+        chan[ch].modOp.fmPhase = 0;
         chan[ch].modOp.modFB1 = 0;
         chan[ch].modOp.modFB2 = 0;
 
@@ -34,7 +34,7 @@ void YamahaYm3812::Reset() {
         chan[ch].carOp.envPhase = adsrPhase::silent;
         chan[ch].carOp.envLevel = 127;
         chan[ch].carOp.amPhase = 0;
-        chan[ch].carOp.vibPhase = 0;
+        chan[ch].carOp.fmPhase = 0;
     }
 }
 
@@ -69,8 +69,17 @@ void YamahaYm3812::WriteReg(int reg, int val) {
         
         switch(reg & 0xe0) {
             case 0x20:
+                if(op.amActive != static_cast<bool>(val & 0x80)) { // If turning off, going to phase 0 effectively disables it.
+                                                                   // If turning on, we want to start from the beginning of the phase.
+                    op.amPhase = 0;
+                }
                 op.amActive = static_cast<bool>(val & 0x80);
+
+                if(op.vibActive != static_cast<bool>(val & 0x40)) { // Similar reasons to the AM one above
+                    op.fmPhase = 0;
+                }
                 op.vibActive = static_cast<bool>(val & 0x40);
+
                 op.sustain = static_cast<bool>(val & 0x20);
                 op.keyScaleRate = static_cast<bool>(val & 0x10);
                 op.freqMult = (val & 0x0f);
@@ -94,8 +103,14 @@ void YamahaYm3812::WriteReg(int reg, int val) {
         }
     }
     else if(reg == 0xbd) { // tremolo, vibrato, rhythm
-        deepTremolo = static_cast<bool>(val & 0x80);
-        deepVibrato = static_cast<bool>(val & 0x40);
+        bool deepTremolo = static_cast<bool>(val & 0x80);
+        if(deepTremolo) tremoloMultiplier = 8;
+        else tremoloMultiplier = 2;
+
+        bool deepVibrato = static_cast<bool>(val & 0x40);
+        if(deepVibrato) vibratoMultiplier = 2;
+        else vibratoMultiplier = 1;
+
         rhythmMode = static_cast<bool>(val & 0x20);
 
         const int key[] = { 0x10, 0x01, 0x08, 0x04, 0x02};
@@ -203,12 +218,12 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                 carOp.phaseCnt += carOp.phaseInc;
 
                 int modSin = lookupSin((modOp.phaseCnt / 1024) - 1 +                              // phase
-                                       (modOp.vibPhase) +                                       // modification for vibrato
+                                       (fmTable[chan[ch].fNum>>7][modOp.fmPhase] * vibratoMultiplier) + // modification for vibrato
                                        (feedback),                                               // modification for feedback
                                        modOp.waveform);
 
                 int modOut = lookupExp((modSin) +                                                // sine input
-                                       (modOp.amPhase * 0x10) +                                 // AM volume attenuation (tremolo)
+                                       amTable[modOp.amPhase] * tremoloMultiplier +            // AM volume attenuation (tremolo)
                                        (modOp.envLevel * 0x10) +                                // Envelope
                                        //TODO: KSL
                                        (modOp.totalLevel * 0x20));                         // Modulator volume
@@ -217,23 +232,23 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
 
                 if(chan[ch].conn == connectionType::fm) {
                     int carSin = lookupSin((carOp.phaseCnt  / 1024) +                                 // phase
-                                        (carOp.vibPhase) +                                    // modification for vibrato
+                                        (fmTable[chan[ch].fNum>>7][carOp.fmPhase] * vibratoMultiplier) + // modification for vibrato
                                         (modOut),                                             // fm modulation
                                         carOp.waveform);
 
                     buffer[i]+=lookupExp((carSin) +                                                  // sine input
-                                        (carOp.amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
+                                        amTable[carOp.amPhase] * tremoloMultiplier +         // AM volume attenuation (tremolo)
                                         (carOp.envLevel * 0x10) +                                  // Envelope
                                         //TODO: KSL
                                         (carOp.totalLevel * 0x20));                         // Channel volume
                 }
                 else {
                     int carSin = lookupSin((carOp.phaseCnt / 1024) +                                 // phase
-                                        (carOp.vibPhase),                                        // modification for vibrato
+                                        (fmTable[chan[ch].fNum>>7][carOp.fmPhase] * vibratoMultiplier), // modification for vibrato
                                         carOp.waveform);
 
                     buffer[i]+=lookupExp((carSin) +                                                  // sine input
-                                        (carOp.amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
+                                        amTable[carOp.amPhase] * tremoloMultiplier +          // AM volume attenuation (tremolo)
                                         (carOp.envLevel * 0x10) +                                  // Envelope
                                         //TODO: KSL
                                         (carOp.totalLevel * 0x20));                                // Channel volume
@@ -257,12 +272,12 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                         int feedback = (percChan[ch].chan->feedbackLevel) ? ((modOp->modFB1 + modOp->modFB2) >> (8 - percChan[ch].chan->feedbackLevel)) : 0;
                         modOp->phaseCnt += modOp->phaseInc;
                         int modSin = lookupSin((modOp->phaseCnt / 1024) - 1 +                         // phase
-                                               (modOp->vibPhase) +                                   // modification for vibrato
+                                               (fmTable[chan[ch].fNum>>7][modOp->fmPhase] * vibratoMultiplier) + // modification for vibrato
                                                (feedback),                                           // modification for feedback
                                                modOp->waveform);
 
                         modOut = lookupExp((modSin) +                                                // sine input
-                                           (modOp->amPhase * 0x10) +                                 // AM volume attenuation (tremolo)
+                                           amTable[modOp->amPhase] * tremoloMultiplier +              // AM volume attenuation (tremolo)
                                            (modOp->envLevel * 0x10) +                                // Envelope
                                            //TODO: KSL
                                            (modOp->totalLevel * 0x20));                              // Modulator volume
@@ -272,11 +287,11 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                     }
                     int carSin = lookupSin((carOp->phaseCnt / 1024) +                                 // phase
                                            (2 * modOut) +                                            // fm modulation
-                                           (carOp->vibPhase),                                        // modification for vibrato
+                                           (fmTable[chan[ch].fNum>>7][carOp->fmPhase] * vibratoMultiplier),                                        // modification for vibrato
                                            carOp->waveform);
 
                     buffer[i]+= lookupExp((carSin) +                                                 // sine input
-                                         (carOp->amPhase * 0x10) +                                   // AM volume attenuation (tremolo)
+                                         amTable[carOp->amPhase] * tremoloMultiplier +               // AM volume attenuation (tremolo)
                                          (carOp->envLevel * 0x10) +                                  // Envelope
                                          //TODO: KSL
                                          (percChan[ch].carOp->totalLevel * 0x20));                   // Channel volume
@@ -336,14 +351,21 @@ int YamahaYm3812::convertWavelength(int wavelength) {
     return (wavelength * OPL_SAMPLE_RATE) / NATIVE_SAMPLE_RATE;
 }
 
-int YamahaYm3812::logsinTable[256];
-int YamahaYm3812::expTable[256];
-const int YamahaYm3812::NATIVE_SAMPLE_RATE = 49716;
-
-const std::string YamahaYm3812::rhythmNames[] {"Bass Drum", "High Hat", 
-                                               "Snare Drum", "Tom-tom", "Top Cymbal"};
-
 void YamahaYm3812::op_t::updateEnvelope(unsigned int counter) {
+    if(amActive && counter % amPhaseSampleLength == 0) {
+        amPhase++;
+        if(amPhase == amTable.size()) {
+            amPhase = 0;
+        }
+    }
+
+    if(vibActive && counter % fmPhaseSampleLength == 0) {
+        fmPhase++;
+        if(fmPhase == fmTable[0].size()) {
+            fmPhase = 0;
+        }
+    }
+    
     if(envPhase == adsrPhase::dampen && envLevel >= 123) { // Dampened previous note, start attack of new note
         envPhase = adsrPhase::attack;
     }
@@ -409,3 +431,34 @@ int YamahaYm3812::op_t::lfsrStepGalois() {
     if (output) galoisState ^= 0x400181;
     return output;
 } 
+
+const std::array<int,210> YamahaYm3812::amTable {
+    0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4,
+    4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 
+    9,10,10,10,10,11,11,11,11,12,12,12,12,13,13,13,13,14,14,14,14,
+    15,15,15,15,16,16,16,16,17,17,17,17,18,18,18,18,19,19,19,19,20,
+    20,20,20,21,21,21,21,22,22,22,22,23,23,23,23,24,24,24,24,25,25,
+    25,25,26,26,26,25,25,25,25,24,24,24,24,23,23,23,23,22,22,22,22,
+    21,21,21,21,20,20,20,20,19,19,19,19,18,18,18,18,17,17,17,17,16,
+    16,16,16,15,15,15,15,14,14,14,14,13,13,13,13,12,12,12,12,11,11,
+    11,11,10,10,10,10, 9, 9, 9, 9, 8, 8, 8, 8, 7, 7, 7, 7, 6, 6, 6,
+    6, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1
+    };
+
+const std::array<std::array<int,8>,8> YamahaYm3812::fmTable {{
+    {0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 1, 0, 0, 0,-1, 0},
+    {0, 1, 2, 1, 0,-1,-2,-1},
+    {0, 1, 3, 1, 0,-1,-3,-1},
+    {0, 2, 4, 2, 0,-2,-4,-2},
+    {0, 2, 5, 2, 0,-2,-5,-2},
+    {0, 3, 6, 3, 0,-3,-6,-3},
+    {0, 3, 7, 3, 0,-3,-7,-3}
+}};
+
+std::array<int,256> YamahaYm3812::logsinTable;
+std::array<int,256> YamahaYm3812::expTable;
+const std::array<uint8_t,16> YamahaYm3812::multVal {1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20, 24, 24, 30, 30};
+const int YamahaYm3812::NATIVE_SAMPLE_RATE;
+const std::array<std::string,5> YamahaYm3812::rhythmNames {"Bass Drum", "High Hat", 
+                                               "Snare Drum", "Tom-tom", "Top Cymbal"};
