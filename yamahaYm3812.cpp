@@ -44,6 +44,7 @@ YamahaYm3812::YamahaYm3812() : curReg(0), statusVal(0), envCounter(0) {
 }
 
 void YamahaYm3812::WriteReg(int reg, int val) {
+    std::lock_guard<std::mutex> guard(regMutex);
     val &= 0xff;
     reg &= 0xff;
 
@@ -52,6 +53,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                                      3, 4, 5, 3, 4, 5, -1, -1,
                                      6, 7, 8, 6, 7, 8, -1, -1,
                                     -1,-1,-1,-1,-1,-1, -1, -1};
+        if(regChanNumber[reg & 0x1f] == -1) return;
         enum slotType {
             MOD, CAR, INV
         };
@@ -203,6 +205,7 @@ void YamahaYm3812::Update(float* buffer, int sampleCnt) {}
 
 void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
     for(int i=0;i<sampleCnt*2;i+=2) {
+        std::lock_guard<std::mutex> guard(regMutex);
         envCounter+=2;
 
         int chanMax = (rhythmMode)?6:9;

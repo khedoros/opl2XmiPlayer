@@ -2,6 +2,7 @@
 #include<utility>
 #include<string>
 #include<array>
+#include<mutex>
 #include "opl.h"
 
 OPLEmul* YamahaYm3812Create(bool stereo);
@@ -23,6 +24,7 @@ private:
     float leftPan;
     float rightPan;
 
+    std::mutex regMutex;
     int tremoloMultiplier; // 1dB when false (add range of 0->43?), 4.8dB when true (0->205?)
     int vibratoMultiplier; // 7 cent when false, 14 cent when true
 

@@ -3,6 +3,7 @@
 //or just as a separate class that I can feed data to.
 
 #include<iostream>
+#include<memory>
 #include "uw_patch.h"
 #include "opl.h"
 #include "yamahaYm3812.h"
@@ -22,7 +23,7 @@ vector<tuple<uint8_t,    uint8_t,     uint16_t>> freqs;
 vector<int16_t> sample_buffer;
 uint32_t sample_playback_offset = 0;
 uint32_t sample_insertion_offset = 0;
-OPLEmul* opl;
+std::unique_ptr<OPLEmul> opl;
 uw_patch_file uwpf;
 uint8_t timbre_bank[256];
 
@@ -248,27 +249,19 @@ int main(int argc, char* argv[]) {
         output_file = argv[2];
     }
     //Instantiate the OPL emulator
-    // opl = JavaOPLCreate(/*bool stereo =*/ true);
-    opl = YamahaYm3812Create(true);
+    opl = std::make_unique<YamahaYm3812>();
     init_opl2();
 
     calc_freqs();//Populate the frequency conversion table
 
     //Look up the timbre->bank map in the xmi file
     pair<uint8_t,uint8_t> * p = xmifile.next_timbre();
-    //size_t ch = 1;
     while(p != nullptr) {
         //Store the expected bank for this timbre
         timbre_bank[p->second] = p->first;
         cout<<"Timbre: Bank: "<<int(p->first)<<" Patch: "<<int(p->second)<<endl;
-        //if(ch < 16) {
-            //patch_assignment[ch] = p->second;
-            //bank_assignment[ch++] = p->first;
-        //}
         p = xmifile.next_timbre();
     }
-
-    //AudioOut out;
 
     uint32_t cur_time = 0;
     uint8_t meta = 0;
@@ -284,15 +277,13 @@ int main(int argc, char* argv[]) {
     int for_nesting = 0;
 
     //pre-allocate the space for the music. Takes roughly 12MB/minute to store
-    cout<<"Building a sound output buffer of "<<dec<<2* tick_count * int(OPL_SAMPLE_RATE / TICK_RATE)<<" bytes"<<endl;
+    cout<<"Building a sound output buffer of "<<dec<<2 * tick_count * int(OPL_SAMPLE_RATE / TICK_RATE)<<" bytes"<<endl;
     sample_buffer.resize(2 * tick_count * int(OPL_SAMPLE_RATE / TICK_RATE), 0);
 
     float lmaxval = 0, lminval = 0, rmaxval = 0, rminval = 0;
-    //bool started = false;
 
     AudioOut ao;
     ao.pause();
-
 
     //Start processing MIDI events from the XMI file
     midi_event* e = xmifile.next_event();
@@ -304,20 +295,6 @@ int main(int argc, char* argv[]) {
                 sample_insertion_offset+=(2 * int(OPL_SAMPLE_RATE/TICK_RATE));
 
                 if(sample_insertion_offset > 100000 && ao.getStatus() != sf::SoundSource::Playing) ao.play();
-
-                /*int16_t * samples = new int16_t[int(OPL_SAMPLE_RATE/(TICK_RATE/2))];
-                opl->Update(samples, int(OPL_SAMPLE_RATE/TICK_RATE));
-                sample_buffer.push_back(samples);
-                if(!started && sample_buffer.size()>=TICK_RATE) { //Ensure 1 second of buffer before trying to play
-                    started = true;
-                    out.play();
-                }
-                
-                for(int j = 0;j < 800; j+=2)
-                    if(samples[j]<lminval) lminval = samples[j];
-                    else if(samples[j]>lmaxval) lmaxval = samples[j];
-                    else if(samples[j+1]<rminval) rminval = samples[j+1];
-                    else if(samples[j+1]>rmaxval) rmaxval = samples[j+1];*/
             }
         }
         cur_time = e->get_time();
@@ -453,10 +430,6 @@ int main(int argc, char* argv[]) {
                     while(ao.getStatus() == sf::SoundSource::Playing) {sf::sleep(sf::seconds(1));}
                     cout<<"Done playing."<<endl;
                 }
-                delete opl;
-                opl=nullptr;
-                //output_data(sample_buffer);
-                //cout<<"Left: min: "<<lminval<<" max: "<<lmaxval<<"\tRight: min: "<<rminval<<" max: "<<rmaxval<<endl;
                 return 0;
             }
             else {
@@ -475,7 +448,5 @@ int main(int argc, char* argv[]) {
         e = xmifile.next_event();
     }
     cout<<"I reached the end of the track without seeing the appropriate command. Weird."<<endl;
-    delete opl;
-    opl=nullptr;
     return 1;
 }
