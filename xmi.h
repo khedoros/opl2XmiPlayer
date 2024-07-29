@@ -2,7 +2,7 @@
 #define XMI_H
 
 #include "util.h"
-#include "midi_event.h"
+#include "midiEvent.h"
 
 #include<stdint.h>
 #include<string>

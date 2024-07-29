@@ -4,11 +4,11 @@
 
 #include<iostream>
 #include<memory>
-#include "uw_patch.h"
+#include "uwPatch.h"
 #include "opl.h"
 #include "yamahaYm3812.h"
 #include "xmi.h"
-#include "midi_event.h"
+#include "midiEvent.h"
 #include<vector>
 #include<list>
 #include<tuple>
