@@ -25,7 +25,7 @@ bool load(string fn) {
     infile>>maj_ver>>min_ver;
     cout<<"DosBoxRawOPL dump version: "<<maj_ver<<"."<<min_ver<<endl;
     if(maj_ver != 2 && min_ver != 0) {
-        cout<<"Just handling version 2.0, for now, sorry."<<endl;
+        cout<<"Versions besides 2.0 are not supported. Bailing."<<endl;
         return false;
     }
     uint32_t pairs, len_ms;
@@ -40,10 +40,10 @@ bool load(string fn) {
     else cout<<"Unknown ("<<int(hw_type)<<")"<<endl;
     uint8_t format;
     infile>>format;
-    if(format != 0) { cout<<"Data isn't interleaved, I'm not sure what to do."<<endl; return false;}
+    if(format != 0) { cout<<"Non-interleaved data isn't supported. Bailing."<<endl; return false;}
     uint8_t compression;
     infile>>compression;
-    if(compression != 0) { cout<<"Compression not supported. Bailing like a coward."<<endl; return false;}
+    if(compression != 0) { cout<<"Compression isn't supported. Bailing."<<endl; return false;}
     uint8_t sh_delay, lng_delay, code_cnt;
     infile>>sh_delay>>lng_delay>>code_cnt;
     cout<<"Short delay: "<<hex<<int(sh_delay)<<" Long delay: "<<int(lng_delay)<<" Code count: "<<int(code_cnt)<<dec<<endl;
@@ -51,15 +51,10 @@ bool load(string fn) {
     reg_trans.resize(code_cnt);
     for(auto& code:reg_trans) { infile>>code; }
     int idx=0;
-    for(auto code:reg_trans) { cout<<idx<<" is register: "<<int(code)<<'\n';idx++; }
+    // for(auto code:reg_trans) { cout<<idx<<" is register: "<<int(code)<<'\n';idx++; }
     opl2.play();
     cout<<"Filesize: "<<filesize<<" offset: "<<infile.tellg()<<" pair count: "<<pairs<<'\n';
     for(size_t i = 0; i < pairs; ++i) {
-        if(opl2.getStatus() != sf::SoundSource::Status::Playing) {
-            std::cout<<"Stopped playing?? Restart it!\n";
-            opl2.play();
-        }
-
         uint8_t reg, val;
         bool card = false;
         infile>>reg>>val;
@@ -67,14 +62,16 @@ bool load(string fn) {
         else cout<<"Card: 0 ";
         reg&=0x7f;
         if(reg > code_cnt - 1 && reg != sh_delay && reg != lng_delay) {
-            cout<<"Error: Found a register code that's too high. Aborting."<<endl; return false; 
+            cout<<"Error: Invalid register code. Bailing."<<endl; return false; 
         }
         cout<<hex<<"Reg: "<<setw(2)<<int(reg_trans[reg])<<" Val: "<<setw(2)<<int(val)<<dec<<'\n';
         if(reg == sh_delay) {
-            cout<<" Delay "<<int(val)+1<<"ms"<<endl; sf::sleep(sf::microseconds((int(val)+1)*1000));
+            cout<<" Delay "<<int(val)+1<<"ms"<<endl;
+            opl2.addTime(int(val)+1);
         }
         else if(reg == lng_delay) {
-            cout<<" Delay "<<(int(val)+1) * 256<<"ms"<<endl; sf::sleep(sf::microseconds((int(val)+1)*256000));
+            cout<<" Delay "<<(int(val)+1) * 256<<"ms"<<endl;
+            opl2.addTime((int(val)+1) * 256);
         }
         else {
             if(!card) {
@@ -84,7 +81,7 @@ bool load(string fn) {
                 std::cout<<"Not handling write to card 1\n";
             }
         }
-        if(size_t(infile.tellg()) > filesize || infile.eof()) cout<<"EEEP! Unexpected end of the file!"<<endl;
+        if(size_t(infile.tellg()) >= filesize || infile.eof()) cout<<"EEEP! Unexpected end of the file!"<<endl;
     }
     cout<<"At file offset "<<infile.tellg()<<", out of expected "<<filesize<<endl;
     return true;
