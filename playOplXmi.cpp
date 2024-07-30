@@ -13,9 +13,8 @@
 #include<list>
 #include<tuple>
 #include<cmath>
-#include<SFML/System.hpp>
-#include<SFML/Audio.hpp>
 #include<thread>
+#include "oplStream.h"
 using namespace std;
 
 //Store midi note number mappings to OPL block number and OPL F-num values
@@ -23,7 +22,7 @@ vector<tuple<uint8_t,    uint8_t,     uint16_t>> freqs;
 vector<int16_t> sample_buffer;
 uint32_t sample_playback_offset = 0;
 uint32_t sample_insertion_offset = 0;
-std::unique_ptr<OPLEmul> opl;
+std::unique_ptr<oplStream> opl;
 uw_patch_file uwpf;
 uint8_t timbre_bank[256];
 
@@ -201,35 +200,6 @@ bool copy_patch(uint8_t voice, uint8_t bank, uint8_t patch) {
     return false;        
 }
 
-// I previously had trouble getting the SoundStream to work. Currently, it doesn't do anything very 
-// smart, like reading from anything but a linear buffer, but my short-term goal was to allow for 
-// immediate playback, rather than the current behavior of having to wait until the whole audio stream 
-// was generated to start playback.
-class AudioOut: public sf::SoundStream {
-    public:
-    AudioOut() {
-        initialize(2,OPL_SAMPLE_RATE);
-    }
-    
-    private:
-    uint32_t offset = 0;
-    void onSeek(sf::Time t) {}
-    bool onGetData(sf::SoundStream::Chunk& data) {
-        data.sampleCount = 10000;
-        if(offset + 10000 < sample_insertion_offset) {
-            data.samples=const_cast<const int16_t *>(&sample_buffer[offset]);
-            offset+=10000;
-        }
-        else if(offset + 10000 >= sample_buffer.size()) {
-            return false;
-        }
-        else {
-            std::cout<<"Buffer underrun by "<<std::dec<<((offset+10000) - sample_insertion_offset)<<" samples"<<std::endl;
-        }
-        return true;
-    }
-};
-
 int main(int argc, char* argv[]) {
     //Load the patch data
     bool success = uwpf.load("sample.opl");
@@ -249,7 +219,7 @@ int main(int argc, char* argv[]) {
         output_file = argv[2];
     }
     //Instantiate the OPL emulator
-    opl = std::make_unique<YamahaYm3812>();
+    opl = std::make_unique<oplStream>();
     init_opl2();
 
     calc_freqs();//Populate the frequency conversion table
@@ -263,7 +233,7 @@ int main(int argc, char* argv[]) {
         p = xmifile.next_timbre();
     }
 
-    uint32_t cur_time = 0;
+    uint32_t curTime = 0;
     uint8_t meta = 0;
     uint8_t channel = 0;
     int8_t voice_num = 0;
@@ -282,23 +252,18 @@ int main(int argc, char* argv[]) {
 
     float lmaxval = 0, lminval = 0, rmaxval = 0, rminval = 0;
 
-    AudioOut ao;
-    ao.pause();
+    opl->play();
 
     //Start processing MIDI events from the XMI file
     midi_event* e = xmifile.next_event();
     while(e != nullptr) {
-        uint32_t sample_count = (int(OPL_SAMPLE_RATE / TICK_RATE)) * (e->get_time() - cur_time);
-        if(sample_count != 0) {
-            for(int i=0;i<(e->get_time() - cur_time);++i) {
-                opl->Update(&(sample_buffer[sample_insertion_offset]), int(OPL_SAMPLE_RATE/TICK_RATE));
-                sample_insertion_offset+=(2 * int(OPL_SAMPLE_RATE/TICK_RATE));
-
-                if(sample_insertion_offset > 100000 && ao.getStatus() != sf::SoundSource::Playing) ao.play();
-            }
+        uint32_t tickCount = e->get_time() - curTime;
+        if(tickCount != 0) {
+            std::cout<<"TickCount: "<<tickCount<<'\n';
+            // std::cout<<"Should pause for "<<((tickCount * 1000) / TICK_RATE)<<" milliseconds\n";
+            opl->addTime((tickCount * 1000) / TICK_RATE );
         }
-        cur_time = e->get_time();
-        //e->toString();
+        curTime = e->get_time();
         bool retval = true;
         switch(e->get_command()) {
         case midi_event::NOTE_OFF: //0x80
@@ -414,20 +379,18 @@ int main(int argc, char* argv[]) {
             meta = e->get_meta();
             if(meta == 0x2f) {
                 cout<<"End of track."<<endl;
-                sf::SoundBuffer sb;
-                cout<<"Loading "<<2 * tick_count * int(OPL_SAMPLE_RATE / TICK_RATE)<<" samples for playback. Should take "<<int(tick_count/120)<<" seconds to play."<<endl;
-                sb.loadFromSamples(&sample_buffer[0], 2* tick_count * int(OPL_SAMPLE_RATE / TICK_RATE), 2, OPL_SAMPLE_RATE);
-                sf::Sound music(sb);
-                if(argc == 3) {
-                    bool worked = sb.saveToFile(output_file);
+
+                if(argc == 3) { // TODO: Move this functionality into oplStream?
+                    //bool worked = sb.saveToFile(output_file);
+                    bool worked = false;
+                    std::cout<<"Output to file currently disabled.\n";
                     if(!worked) cout<<"Couldn't output to the file '"<<output_file<<"'. Sorry."<<endl;
                     else cout<<"Output a rendering of the music to '"<<output_file<<"'."<<endl;
                 }
                 else {
-                    //music.play();
-                    sf::sleep(sf::seconds(1));
-                    //while(music.getStatus() == sf::SoundSource::Playing) {sf::sleep(sf::seconds(1));}
-                    while(ao.getStatus() == sf::SoundSource::Playing) {sf::sleep(sf::seconds(1));}
+                    while(opl->getQueuedAudioBytes() > 0) {
+                        SDL_Delay(100);
+                    }
                     cout<<"Done playing."<<endl;
                 }
                 return 0;

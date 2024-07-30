@@ -51,6 +51,9 @@ class oplStream : public OPLEmul {
                 }
             }
         }
+        uint32_t getQueuedAudioBytes() {
+            return SDL_GetQueuedAudioSize(sdlDevId);
+        }
 
         virtual void Update(float *buffer, int length) override {opl.Update(buffer,length);}
         virtual void Update(int16_t *buffer, int length) override {opl.Update(buffer,length);}
