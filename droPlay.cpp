@@ -81,7 +81,7 @@ bool load(string fn) {
                 std::cout<<"Not handling write to card 1\n";
             }
         }
-        if(size_t(infile.tellg()) >= filesize || infile.eof()) cout<<"EEEP! Unexpected end of the file!"<<endl;
+        if(size_t(infile.tellg()) > filesize || infile.eof()) cout<<"EEEP! Unexpected end of the file!"<<endl;
     }
     cout<<"At file offset "<<infile.tellg()<<", out of expected "<<filesize<<endl;
     return true;
