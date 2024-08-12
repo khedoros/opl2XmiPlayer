@@ -17,11 +17,11 @@
 #include "oplStream.h"
 using namespace std;
 
+array<bool,16> seenNotes;
+array<vector<tuple<uint8_t, uint8_t>>, 16> seenPatches;
+
 //Store midi note number mappings to OPL block number and OPL F-num values
 vector<tuple<uint8_t,    uint8_t,     uint16_t>> freqs;
-vector<int16_t> sample_buffer;
-uint32_t sample_playback_offset = 0;
-uint32_t sample_insertion_offset = 0;
 std::unique_ptr<oplStream> opl;
 uw_patch_file uwpf;
 uint8_t timbre_bank[256];
@@ -31,21 +31,23 @@ const uint32_t TICK_RATE = 120;
 const float MIDI_MAX_VAL = 127.0;
 
 //Data and methods having to do with current use of OPL channels, voice assignments, etc
+const int OPL_VOICE_COUNT = 9;
 
 //Which channel and note each of the 9 voices in an OPL2 chip is set to play. -1 means "none".
-int8_t opl_channel_assignment[9] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
-int8_t opl_note_assignment[9] =    {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+std::array<int8_t, OPL_VOICE_COUNT> opl_channel_assignment {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+std::array<int8_t, OPL_VOICE_COUNT> opl_rhythm_note        {-1,-1,-1,-1,-1,-1,-1,-1,-1};
 
 //Which patch and bank is each MIDI channel currently set to play
 //Initialize them to 0:0
-uint8_t bank_assignment[16] =  {  0,  0,  0,  0,  0,  0,  0,  0,  0,127,  0,  0,  0,  0,  0,  0};
-uint8_t patch_assignment[16] = {  0, 68, 48, 95, 78, 41,  3,110,122, 36,  0,  0,  0,  0,  0,  0};
-uint8_t channel_volume[16] =   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0};
+const int MIDI_CHANNEL_COUNT = 16;
+std::array<uint8_t, MIDI_CHANNEL_COUNT> bank_assignment  {  0,  0,  0,  0,  0,  0,  0,  0,  0,127,  0,  0,  0,  0,  0,  0};
+std::array<uint8_t, MIDI_CHANNEL_COUNT> patch_assignment {  0, 68, 48, 95, 78, 41,  3,110,122, 36,  0,  0,  0,  0,  0,  0};
+std::array<uint8_t, MIDI_CHANNEL_COUNT> channel_volume   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0};
 
-const int OPL_VOICE_COUNT = 9;
 
-const uint16_t voice_base[OPL_VOICE_COUNT] =  {    0,     1,     2,    8,    9,  0xa, 0x10, 0x11, 0x12};
-const uint16_t voice_base2[OPL_VOICE_COUNT] = {    0,     1,     2,    3,    4,    5,    6,    7,    8};
+const std::array<uint16_t, OPL_VOICE_COUNT> voice_base   {    0,     1,     2,    8,    9,  0xa, 0x10, 0x11, 0x12};
+const std::array<uint16_t, OPL_VOICE_COUNT> voice_base2  {    0,     1,     2,    3,    4,    5,    6,    7,    8};
 
 enum OPL_addresses {
     TEST       = 0x01, //Set to 0
@@ -123,7 +125,7 @@ void calc_freqs() {
 //Write values to the OPL2 emulator to initialize it to defaults
 void init_opl2() {
     opl->Reset();
-    for(int i=0;i<18;++i)
+    for(int i=0;i<OPL_VOICE_COUNT;++i)
         opl->SetPanning(i, 0.5,0.5);
      const uint8_t init_array1[] =
      {0,0x20,   0,   0,0x60,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   //00-0f Turn on waveform select, mask timer interrupts
@@ -162,6 +164,7 @@ bool copy_patch(uint8_t voice, uint8_t bank, uint8_t patch) {
     for(auto it = uwpf.bank_data.begin(); it != uwpf.bank_data.end(); ++it) {
         if(it->bank == bank && it->patch == patch) {
             uw_patch_file::opl2_patch pat = it->ad_patchdatastruct;
+            opl_rhythm_note[voice] = pat.transpose;
             //Write the values to the modulator:
             opl->WriteReg(voice_base[voice]+0x20,(pat.mod_freq_mult&0x0f) +
                                                  ((pat.mod_env_scaling&1)<<(4)) +
@@ -201,22 +204,29 @@ bool copy_patch(uint8_t voice, uint8_t bank, uint8_t patch) {
 }
 
 int main(int argc, char* argv[]) {
-    //Load the patch data
-    bool success = uwpf.load("sample.opl");
-    if(!success) {
-        cout<<"Couldn't load the patch file. Aborting."<<endl;
-    }
-    //Load the music itself
     xmi xmifile;
-    success = xmifile.load(argv[1]);
-    if(!success) {
-        cout<<"Couldn't load the xmi file. Aborting."<<endl;
+
+    if(argc == 3) {
+        //Load the patch data
+        bool success = uwpf.load(argv[1]);
+        if(!success) {
+            cout<<"Couldn't load the patch file. Aborting.\n";
+        }
+        //Load the music itself
+        success = xmifile.load(argv[2]);
+        if(!success) {
+            cout<<"Couldn't load the xmi file. Aborting.\n";
+        }
+    }
+    else {
+        std::cout<<"Provide the instrument library and XMI file to load.\n";
+        return 1;
     }
 
     string output_file = "";
 
-    if(argc == 3) {
-        output_file = argv[2];
+    if(argc == 4) {
+        output_file = argv[3];
     }
     //Instantiate the OPL emulator
     opl = std::make_unique<oplStream>();
@@ -241,14 +251,11 @@ int main(int argc, char* argv[]) {
     uint8_t block = 0;
     uint8_t midi_num = 0;
     uint8_t * v;
+    uint8_t potential_instrument_num = 0;
     uint32_t tick_count = xmifile.tick_count();
 
     uint8_t for_counter[4] = {0};
-    int for_nesting = 0;
-
-    //pre-allocate the space for the music. Takes roughly 12MB/minute to store
-    cout<<"Building a sound output buffer of "<<dec<<2 * tick_count * int(OPL_SAMPLE_RATE / TICK_RATE)<<" bytes"<<endl;
-    sample_buffer.resize(2 * tick_count * int(OPL_SAMPLE_RATE / TICK_RATE), 0);
+    int for_nesting = 0;;
 
     float lmaxval = 0, lminval = 0, rmaxval = 0, rminval = 0;
 
@@ -259,17 +266,17 @@ int main(int argc, char* argv[]) {
     while(e != nullptr) {
         uint32_t tickCount = e->get_time() - curTime;
         if(tickCount != 0) {
-            std::cout<<"TickCount: "<<tickCount<<'\n';
+            // std::cout<<"TickCount: "<<tickCount<<'\n';
             // std::cout<<"Should pause for "<<((tickCount * 1000) / TICK_RATE)<<" milliseconds\n";
             opl->addTime((tickCount * 1000) / TICK_RATE );
         }
+        v = e->get_data();
+        channel = e->get_channel();
         curTime = e->get_time();
         bool retval = true;
         switch(e->get_command()) {
         case midi_event::NOTE_OFF: //0x80
             //Look up the voice playing the note, and the block+f_num values
-            channel = e->get_channel();
-            v = e->get_data();
             midi_num = v[1];
             block = get<1>(freqs[midi_num]);
             f_num = get<2>(freqs[midi_num]);
@@ -290,27 +297,41 @@ int main(int argc, char* argv[]) {
                 cout<<"No free voice, dropping a note."<<endl;
                 break;
             }
-            channel = e->get_channel();
-            retval = copy_patch(voice_num, bank_assignment[channel], patch_assignment[channel]);
+            seenNotes[channel]=true;
+
+            // Need to know the note number, if the instrument is rhythm
+            if(bank_assignment[channel] == 127) {
+                uint8_t patchNum = v[1];
+                retval = copy_patch(voice_num, bank_assignment[channel], patchNum);
+                std::cout<<"Channel "<<int(channel)<<": Bank 127, patch "<<int(patchNum)<<" (channel assignment "<<patch_assignment[channel]<<") "; 
+                midi_num = opl_rhythm_note[voice_num];
+                std::cout<<" note "<<int(midi_num)<<'\n';
+                opl_note_assignment[voice_num] = patchNum; 
+
+            }
+            else {
+                retval = copy_patch(voice_num, bank_assignment[channel], patch_assignment[channel]);
+                midi_num = v[1];
+                opl_note_assignment[voice_num] = midi_num; 
+            }
+
             if(!retval) { cout<<"Had trouble copying "<<int(bank_assignment[channel])<<":"<<int(patch_assignment[channel])<<" to channel "<<int(channel)<<". Dropping the note."<<endl;
                 break;
             }
             //Look up the note info, store in note tracking, write the note-on register commands
-            v = e->get_data();
-            midi_num = v[1];
+
             block = get<1>(freqs[midi_num]);
             f_num = get<2>(freqs[midi_num]);
             opl_channel_assignment[voice_num] = channel;
-            opl_note_assignment[voice_num] = midi_num; 
+
             opl->WriteReg(voice_base2[voice_num]+0xa0, (f_num&0xff));
             opl->WriteReg(voice_base2[voice_num]+0xb0, 0x20 + (block<<(2)) + ((f_num&0xff00)>>(8)));
             break;
         case midi_event::PROGRAM_CHANGE: //0xc0
-            v = e->get_data();
-            channel = e->get_channel();
             patch_assignment[channel] = v[1];
-            bank_assignment[channel] = timbre_bank[v[1]];
-            for(int i=0;i<18;++i) {
+            // bank_assignment[channel] = timbre_bank[v[1]];
+            /*
+            for(int i=0;i<OPL_VOICE_COUNT;++i) {
                 if(opl_channel_assignment[i] == channel) {
                     retval = copy_patch(i, bank_assignment[channel], patch_assignment[channel]);
                     if(!retval) {
@@ -318,40 +339,39 @@ int main(int argc, char* argv[]) {
                         break;
                     }
                 }
-            }
+            }*/
             cout<<dec<<"Program change: Channel "<<int(channel)<<"->"<<int(bank_assignment[channel])<<":"<<int(patch_assignment[channel])<<endl;
             break;
         case midi_event::CONTROL_CHANGE: //0xb0
             meta = e->get_meta();
-            channel = e->get_channel();
-            v = e->get_data();
             if(meta == 0x07) { //Volume change
                 channel_volume[channel] = v[2];
-                for(int i=0;i<18;++i) {
+                for(int i=0;i<OPL_VOICE_COUNT;++i) {
                     if(opl_channel_assignment[i] == channel) {
                         opl->WriteReg(voice_base[i] + 0x40 + 3, 63 - (channel_volume[channel] >> 1));
                     }
                 }
             }
             else if(meta == 0x0a) { //Panning controll
-                for(int i=0;i<18;++i) {
+                for(int i=0;i<OPL_VOICE_COUNT;++i) {
                     if(opl_channel_assignment[i] == channel)
                         opl->SetPanning(channel, 0.5 * (1.0 - float(v[2])/MIDI_MAX_VAL), 0.5*(float(v[2])/MIDI_MAX_VAL));
                 }
             }
             else if(meta == 0x72) { //Bank change
                 bank_assignment[channel] = v[2];
-                for(int i=0;i<18;++i) {
+                /*
+                for(int i=0;i<OPL_VOICE_COUNT;++i) {
                     if(opl_channel_assignment[i] == channel) {
                         copy_patch(i, bank_assignment[channel], patch_assignment[channel]);
                     }
-                }
+                }*/
+                cout<<dec<<"Bank change: Channel "<<int(channel)<<"->"<<int(bank_assignment[channel])<<":"<<int(patch_assignment[channel])<<endl;
             }           
             else if(meta == 0x6e) cout<<"Channel lock (not implemented)"<<endl;
             else if(meta == 0x6f) cout<<"Channel lock protect (not implemented)"<<endl;
             else if(meta == 0x70) cout<<"Voice protect (not implemented)"<<endl;
             else if(meta == 0x71) cout<<"Timbre protect (not implemented)"<<endl;
-            else if(meta == 0x72) cout<<"Patch bank select (not implemented)"<<endl;
             else if(meta == 0x73) cout<<"Indirect controller prefix (not implemented)"<<endl;
             else if(meta == 0x74) {
                 cout<<"For loop controller (not implemented) data: ";
@@ -392,11 +412,14 @@ int main(int argc, char* argv[]) {
                         SDL_Delay(100);
                     }
                     cout<<"Done playing."<<endl;
+                    for(int i=0;i<MIDI_CHANNEL_COUNT;i++) {
+                        std::cout<<"Channel "<<i+1<<": "<<seenNotes[i]<<'\n';
+                    }
                 }
                 return 0;
             }
             else {
-                cout<<"Ignoring meta command"<<std::hex<<"0x"<<meta<<endl;
+                cout<<"Ignoring meta command"<<std::hex<<" 0x"<<int(meta)<<endl;
             }
             break;
         case midi_event::PITCH_WHEEL: //0xe0
@@ -404,7 +427,6 @@ int main(int argc, char* argv[]) {
             break;
         default:
             cout<<"Not implemented, yet: ";
-            v = e->get_data();
             cout<<hex<<int(v[0])<<" "<<int(v[1])<<" "<<int(v[2])<<endl;
         }
 
