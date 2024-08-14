@@ -10,6 +10,7 @@ OPLEmul* YamahaYm3812Create(bool stereo);
 class YamahaYm3812: public OPLEmul {
 public:
     YamahaYm3812();
+    YamahaYm3812(bool stereo);
 
     virtual void Reset() override;
     virtual void WriteReg(int reg, int v) override;
@@ -23,6 +24,7 @@ private:
     uint8_t statusVal;
     float leftPan;
     float rightPan;
+    int audioChannels; // Stereo (2) or mono (1)
 
     std::mutex regMutex;
     int tremoloMultiplier; // 1dB when false (add range of 0->43?), 4.8dB when true (0->205?)

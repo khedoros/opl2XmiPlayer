@@ -7,7 +7,7 @@
 OPLEmul *YamahaYm3812Create(bool stereo)
 {
     /* emulator create */
-    return new YamahaYm3812;
+    return new YamahaYm3812(stereo);
 }
 
 void YamahaYm3812::Reset() {
@@ -38,7 +38,12 @@ void YamahaYm3812::Reset() {
     }
 }
 
-YamahaYm3812::YamahaYm3812() : curReg(0), statusVal(0), envCounter(0) {
+YamahaYm3812::YamahaYm3812() : curReg(0), statusVal(0), envCounter(0), audioChannels(2) {
+    initTables();
+    Reset();
+}
+
+YamahaYm3812::YamahaYm3812(bool stereo) : curReg(0), statusVal(0), envCounter(0), audioChannels(stereo?2:1) {
     initTables();
     Reset();
 }
@@ -204,7 +209,7 @@ void YamahaYm3812::SetPanning(int channel, float left, float right) {}
 void YamahaYm3812::Update(float* buffer, int sampleCnt) {}
 
 void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
-    for(int i=0;i<sampleCnt*2;i+=2) {
+    for(int i=0;i<sampleCnt*audioChannels;i+=audioChannels) {
         std::lock_guard<std::mutex> guard(regMutex);
         envCounter+=2;
 
@@ -259,7 +264,9 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                 }
             }
         }
-        buffer[i+1] = buffer[i];
+        if(audioChannels == 2) {
+            buffer[i+1] = buffer[i];
+        }
         if(rhythmMode) { // TODO: handle the 5 rhythm instruments (correctly)
             for(int ch = 0; ch < 5; ch++) {
                 op_t* modOp = percChan[ch].modOp;
@@ -300,7 +307,9 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                                          (percChan[ch].carOp->totalLevel * 0x20));                   // Channel volume
                 }
             }
-            buffer[i+1] = buffer[i];
+            if(audioChannels == 2) {
+                buffer[i+1] = buffer[i];
+            }
         }
     }
 }

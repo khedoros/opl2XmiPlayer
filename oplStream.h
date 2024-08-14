@@ -11,16 +11,19 @@
 class oplStream : public OPLEmul {
     private:
         YamahaYm3812 opl;
-        static const int stereoChannels = 2;
-        static const int sampleRate = 44100;
-        static const int processPerSecond = 100;
+        static const int stereoChannels = 1;
+        static const int sampleRate = 49716;
+        // static const int sampleRate = 11025;
+        // static const int sampleRate = 44100;
+        static const int processPerSecond = 72;
+        // static const int processPerSecond = 100;
         static const int sampleChunkSize = (sampleRate * stereoChannels) / processPerSecond;
         static const int sampleChunkTimeInMs = 1000 / processPerSecond;
         std::array<int16_t,sampleChunkSize> buffer;
         int remainingMilliseconds;
         int sdlDevId;
     public:
-        oplStream() : opl(),remainingMilliseconds{0} {
+        oplStream() : opl(stereoChannels == 2),remainingMilliseconds{0} {
             std::cout<<"Init the stream to "<<stereoChannels<<" channels, "<<sampleRate<<"Hz sample rate\n";
             initSDLAudio();
         }
@@ -46,7 +49,7 @@ class oplStream : public OPLEmul {
                 remainingMilliseconds -= sampleChunkTimeInMs;
                 SDL_QueueAudio(sdlDevId, buffer.data(), sampleChunkSize * sizeof(int16_t));
 
-                while(SDL_GetQueuedAudioSize(sdlDevId) > 10 * sampleChunkSize * sizeof(int16_t)) {
+                while(SDL_GetQueuedAudioSize(sdlDevId) > 100 * sampleChunkSize * sizeof(int16_t)) {
                     SDL_Delay(sampleChunkTimeInMs);
                 }
             }
@@ -59,25 +62,9 @@ class oplStream : public OPLEmul {
         virtual void Update(int16_t *buffer, int length) override {opl.Update(buffer,length);}
         virtual void SetPanning(int channel, float left, float right) override {opl.SetPanning(channel, left, right);}
         int initSDLAudio() {
-            int num_drivers = SDL_GetNumAudioDrivers();
-            unsigned int chosen_driver = 255;
-            unsigned int driver_desirability = 255;
-            std::array<std::array<const char, 20>, 6> desired_drivers = {"directsound", "winmm", "pulse", "pulseaudio", "alsa", "dummy"};
-            for(int i=0; i<num_drivers;i++) {
-                for(unsigned int j=0;j<desired_drivers.size();j++) {
-                    if(strncmp((desired_drivers[j].data()), SDL_GetAudioDriver(i), 20) == 0 && j < driver_desirability) {
-                        chosen_driver = i;
-                        driver_desirability = j;
-                    }
-                }
-            }
-
-            if(chosen_driver == 255) {
-                chosen_driver = 0;
-            }
-            int failure_code = SDL_AudioInit(SDL_GetAudioDriver(chosen_driver));
+            int failure_code = SDL_Init(SDL_INIT_AUDIO);
             if(failure_code) {
-                fprintf(stderr, "Error init'ing driver: %s", SDL_GetError());
+                fprintf(stderr, "Error init'ing audio subsystem: %s\n", SDL_GetError());
             }
 
             SDL_AudioSpec want;
