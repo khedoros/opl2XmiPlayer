@@ -213,6 +213,8 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
         std::lock_guard<std::mutex> guard(regMutex);
         envCounter+=2;
 
+        int16_t sample = 0;
+
         int chanMax = (rhythmMode)?6:9;
         for(int ch=0;ch<chanMax;ch++) {
             op_t& modOp = chan[ch].modOp;
@@ -244,7 +246,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                                         (modOut),                                             // fm modulation
                                         carOp.waveform);
 
-                    buffer[i]+=lookupExp((carSin) +                                                  // sine input
+                    sample+=lookupExp((carSin) +                                                  // sine input
                                         amTable[carOp.amPhase] * tremoloMultiplier +         // AM volume attenuation (tremolo)
                                         (carOp.envLevel * 0x10) +                                  // Envelope
                                         //TODO: KSL
@@ -255,17 +257,14 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                                         (fmTable[chan[ch].fNum>>7][carOp.fmPhase] * vibratoMultiplier), // modification for vibrato
                                         carOp.waveform);
 
-                    buffer[i]+=lookupExp((carSin) +                                                  // sine input
+                    sample+=lookupExp((carSin) +                                                  // sine input
                                         amTable[carOp.amPhase] * tremoloMultiplier +          // AM volume attenuation (tremolo)
                                         (carOp.envLevel * 0x10) +                                  // Envelope
                                         //TODO: KSL
                                         (carOp.totalLevel * 0x20));                                // Channel volume
-                    buffer[i] += modOut;
+                    sample += modOut;
                 }
             }
-        }
-        if(audioChannels == 2) {
-            buffer[i+1] = buffer[i];
         }
         if(rhythmMode) { // TODO: handle the 5 rhythm instruments (correctly)
             for(int ch = 0; ch < 5; ch++) {
@@ -300,16 +299,17 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                                            (fmTable[chan[ch].fNum>>7][carOp->fmPhase] * vibratoMultiplier),                                        // modification for vibrato
                                            carOp->waveform);
 
-                    buffer[i]+= lookupExp((carSin) +                                                 // sine input
+                    sample+=    lookupExp((carSin) +                                                 // sine input
                                          amTable[carOp->amPhase] * tremoloMultiplier +               // AM volume attenuation (tremolo)
                                          (carOp->envLevel * 0x10) +                                  // Envelope
                                          //TODO: KSL
                                          (percChan[ch].carOp->totalLevel * 0x20));                   // Channel volume
                 }
             }
-            if(audioChannels == 2) {
-                buffer[i+1] = buffer[i];
-            }
+        }
+        buffer[i] = sample;
+        if(audioChannels == 2) {
+            buffer[i+1] = buffer[i];
         }
     }
 }
