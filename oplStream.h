@@ -19,10 +19,12 @@ class oplStream : public OPLEmul {
         std::array<int16_t,sampleChunkSize> buffer;
         int remainingMilliseconds;
         int sdlDevId;
+        bool stopped;
     public:
-        oplStream() : opl(stereoChannels == 2),remainingMilliseconds{0} {
+        oplStream() : opl(stereoChannels == 2),remainingMilliseconds{0}, stopped{false} {
             std::cout<<"Init the stream to "<<stereoChannels<<" channels, "<<sampleRate<<"Hz sample rate\n";
             initSDLAudio();
+            pause();
         }
         ~oplStream() {
             std::cout<<"Deconstruct the stream\n";
@@ -43,13 +45,22 @@ class oplStream : public OPLEmul {
         }
         void addTime(int milliseconds) {
             remainingMilliseconds += milliseconds;
-            while(remainingMilliseconds >= sampleChunkTimeInMs) {
+            while(!stopped && remainingMilliseconds >= sampleChunkTimeInMs) {
                 buffer.fill(0);
                 opl.Update(buffer.data(), sampleChunkSize / stereoChannels);
                 remainingMilliseconds -= sampleChunkTimeInMs;
                 SDL_QueueAudio(sdlDevId, buffer.data(), sampleChunkSize * sizeof(int16_t));
 
                 while(SDL_GetQueuedAudioSize(sdlDevId) > 100 * sampleChunkSize * sizeof(int16_t)) {
+                    SDL_Event event;
+                    while(SDL_PollEvent(&event)) {
+                        switch(event.type) {
+                        case SDL_QUIT:
+                            SDL_PauseAudio(true);
+                            SDL_Quit();
+                            stopped = true;
+                        }
+                    }
                     SDL_Delay(sampleChunkTimeInMs);
                 }
             }
@@ -85,7 +96,6 @@ class oplStream : public OPLEmul {
             }
             else {
                 printf("Freq: %d format: %d (%d) ch: %d sil: %d samp: %d size: %d\n", got.freq, got.format, want.format, got.channels, got.silence, got.samples, got.size);
-                SDL_PauseAudioDevice(sdlDevId, 0);
             }
             return sdlDevId;
         }

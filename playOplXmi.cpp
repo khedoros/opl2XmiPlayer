@@ -188,6 +188,7 @@ void writeVolume(uint8_t voice_num) {
     vol *= velocity; vol >>= 7;
     if(connection) { // additive operator, so scale modulating operator too
         uint16_t mod_vol = ~((vol * mod_tl) / 127);
+        assert(mod_vol <= 0x3f);
         opl->WriteReg(voice_base[voice_num]+0x40,(mod_vol & 0x3f) +
                                             ((mod_ksl & 0x3)<<(6)));
     }
@@ -357,7 +358,7 @@ int main(int argc, char* argv[]) {
                 retval = copy_patch(voice_num, bank_assignment[channel], patch_assignment[channel]);
                 midi_num = v[1];
                 opl_note_assignment[voice_num] = midi_num; 
-                opl_note_velocity[voice_num] = velocity_translation[v[2]>>3];
+                opl_note_velocity[voice_num] = velocity_translation[v[2]>>4];
             //}
 
             if(!retval) { cout<<"Had trouble copying "<<int(bank_assignment[channel])<<":"<<int(patch_assignment[channel])<<" to channel "<<int(channel)<<". Dropping the note."<<endl;
