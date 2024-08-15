@@ -36,15 +36,19 @@ const int OPL_VOICE_COUNT = 9;
 //Which channel and note each of the 9 voices in an OPL2 chip is set to play. -1 means "none".
 std::array<int8_t, OPL_VOICE_COUNT> opl_channel_assignment {-1,-1,-1,-1,-1,-1,-1,-1,-1};
 std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1};
-std::array<int8_t, OPL_VOICE_COUNT> opl_rhythm_note        {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+std::array<int8_t, OPL_VOICE_COUNT> opl_note_velocity      {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+std::array<int8_t, OPL_VOICE_COUNT> opl_patch_transpose        {-1,-1,-1,-1,-1,-1,-1,-1,-1};
 
 //Which patch and bank is each MIDI channel currently set to play
 //Initialize them to 0:0
 const int MIDI_CHANNEL_COUNT = 16;
-std::array<uint8_t, MIDI_CHANNEL_COUNT> bank_assignment  {  0,  0,  0,  0,  0,  0,  0,  0,  0,127,  0,  0,  0,  0,  0,  0};
-std::array<uint8_t, MIDI_CHANNEL_COUNT> patch_assignment {  0, 68, 48, 95, 78, 41,  3,110,122, 36,  0,  0,  0,  0,  0,  0};
-std::array<uint8_t, MIDI_CHANNEL_COUNT> channel_volume   {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0};
+std::array<uint8_t, MIDI_CHANNEL_COUNT> bank_assignment    {  0,  0,  0,  0,  0,  0,  0,  0,  0,127,  0,  0,  0,  0,  0,  0};
+std::array<uint8_t, MIDI_CHANNEL_COUNT> patch_assignment   {  0, 68, 48, 95, 78, 41,  3,110,122, 36,  0,  0,  0,  0,  0,  0};
+std::array<uint8_t, MIDI_CHANNEL_COUNT> channel_modulation {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0};
+std::array<uint8_t, MIDI_CHANNEL_COUNT> channel_volume     {127,127,127,127,127,127,127,127,127,127,127,127,127,127,127,127};
+std::array<uint8_t, MIDI_CHANNEL_COUNT> channel_expression {127,127,127,127,127,127,127,127,127,127,127,127,127,127,127,127};
 
+const std::array<uint8_t, 16> velocity_translation { 0x52, 0x55, 0x58, 0x5b, 0x5e, 0x61, 0x64, 0x67, 0x6a, 0x6d, 0x70, 0x73, 0x76, 0x79, 0x7c, 0x7f };
 
 const std::array<uint16_t, OPL_VOICE_COUNT> voice_base   {    0,     1,     2,    8,    9,  0xa, 0x10, 0x11, 0x12};
 const std::array<uint16_t, OPL_VOICE_COUNT> voice_base2  {    0,     1,     2,    3,    4,    5,    6,    7,    8};
@@ -152,10 +156,44 @@ void init_opl2() {
 
 //Set the notes of the OPL3 to silent
 void pause_sound() {
+    opl->pause();
 }
 
 //Set the notes of the OPL3 to play again, if previously silenced
 void unpause_sound() {
+    opl->play();
+}
+
+// Write proper volume for the given voice, taking into account the patch's TL, note velocity, channel volume and expression.
+void writeVolume(uint8_t voice_num) {
+    uint8_t channel = opl_channel_assignment[voice_num];
+    uint8_t patchNum = patch_assignment[channel];
+    uint8_t bankNum = bank_assignment[channel];
+    uint8_t velocity = opl_note_velocity[voice_num];
+    uint8_t mod_tl, car_tl, connection, fb, mod_ksl, car_ksl;
+    for(auto& patch: uwpf.bank_data) {
+        if(patch.patch == patchNum && patch.bank == bankNum) {
+            mod_tl = patch.ad_patchdatastruct.mod_out_lvl;
+            car_tl = patch.ad_patchdatastruct.car_out_lvl;
+            mod_tl = (~mod_tl) & 0x3f;
+            car_tl = (~car_tl) & 0x3f;
+            connection = patch.ad_patchdatastruct.connection;
+            fb = patch.ad_patchdatastruct.feedback;
+            mod_ksl = patch.ad_patchdatastruct.mod_key_scale;
+            car_ksl = patch.ad_patchdatastruct.car_key_scale;
+        }
+    }
+
+    uint16_t vol = (uint16_t(channel_volume[channel]) * channel_expression[channel])>>7;
+    vol *= velocity; vol >>= 7;
+    if(connection) { // additive operator, so scale modulating operator too
+        uint16_t mod_vol = ~((vol * mod_tl) / 127);
+        opl->WriteReg(voice_base[voice_num]+0x40,(mod_vol & 0x3f) +
+                                            ((mod_ksl & 0x3)<<(6)));
+    }
+    uint16_t car_vol = ~((vol * car_tl) / 127);
+    opl->WriteReg(voice_base[voice_num]+0x43,((car_vol & 0x3f) +
+                                         ((car_ksl & 0x3)<<(6))));
 }
 
 //Copies the given patch data into the given voice slot
@@ -164,15 +202,17 @@ bool copy_patch(uint8_t voice, uint8_t bank, uint8_t patch) {
     for(auto it = uwpf.bank_data.begin(); it != uwpf.bank_data.end(); ++it) {
         if(it->bank == bank && it->patch == patch) {
             uw_patch_file::opl2_patch pat = it->ad_patchdatastruct;
-            opl_rhythm_note[voice] = pat.transpose;
+            opl_patch_transpose[voice] = pat.transpose;
             //Write the values to the modulator:
             opl->WriteReg(voice_base[voice]+0x20,(pat.mod_freq_mult&0x0f) +
                                                  ((pat.mod_env_scaling&1)<<(4)) +
                                                  ((pat.mod_sustain_sound&1)<<(5)) +
                                                  ((pat.mod_ampl_vibrato&1)<<(6)) +
                                                  ((pat.mod_freq_vibrato&1)<<(7)));
-            opl->WriteReg(voice_base[voice]+0x40,(pat.mod_out_lvl&0x3f) +
-                                                 ((pat.mod_key_scale&0x3)<<(6)));
+            if(pat.connection == 0) { 
+                opl->WriteReg(voice_base[voice]+0x40,(pat.mod_out_lvl&0x3f) +
+                                                     ((pat.mod_key_scale&0x3)<<(6)));
+            }
             opl->WriteReg(voice_base[voice]+0x60,(pat.mod_decay&0xf) +
                                                  ((pat.mod_attack&0xf)<<(4)));
             opl->WriteReg(voice_base[voice]+0x80,(pat.mod_release&0xf) +
@@ -187,8 +227,10 @@ bool copy_patch(uint8_t voice, uint8_t bank, uint8_t patch) {
                                                  ((pat.car_sustain_sound&1)<<(5)) +
                                                  ((pat.car_ampl_vibrato&1)<<(6)) +
                                                  ((pat.car_freq_vibrato&1)<<(7)));
+            /*
             opl->WriteReg(voice_base[voice]+0x43,((pat.car_out_lvl&0x3f) +
                                                  ((pat.car_key_scale&0x3)<<(6))));
+            */
             opl->WriteReg(voice_base[voice]+0x63,(pat.car_decay&0xf) +
                                                  ((pat.car_attack&0xf)<<(4)));
             opl->WriteReg(voice_base[voice]+0x83,(pat.car_release&0xf) +
@@ -196,6 +238,7 @@ bool copy_patch(uint8_t voice, uint8_t bank, uint8_t patch) {
             opl->WriteReg(voice_base[voice]+0xc3,(pat.connection&0x7)+
                                                  ((pat.feedback&0x7)<<(1)));
             opl->WriteReg(voice_base[voice]+0xe3,(pat.car_waveform&3));
+            writeVolume(voice);
             return true;
         }
     }
@@ -300,20 +343,22 @@ int main(int argc, char* argv[]) {
             seenNotes[channel]=true;
 
             // Need to know the note number, if the instrument is rhythm
+            /*
             if(bank_assignment[channel] == 127) {
                 uint8_t patchNum = v[1];
                 retval = copy_patch(voice_num, bank_assignment[channel], patchNum);
                 std::cout<<"Channel "<<int(channel)<<": Bank 127, patch "<<int(patchNum)<<" (channel assignment "<<patch_assignment[channel]<<") "; 
-                midi_num = opl_rhythm_note[voice_num];
+                midi_num = opl_patch_transpose[voice_num];
                 std::cout<<" note "<<int(midi_num)<<'\n';
                 opl_note_assignment[voice_num] = patchNum; 
 
             }
-            else {
+            else {*/
                 retval = copy_patch(voice_num, bank_assignment[channel], patch_assignment[channel]);
                 midi_num = v[1];
                 opl_note_assignment[voice_num] = midi_num; 
-            }
+                opl_note_velocity[voice_num] = velocity_translation[v[2]>>3];
+            //}
 
             if(!retval) { cout<<"Had trouble copying "<<int(bank_assignment[channel])<<":"<<int(patch_assignment[channel])<<" to channel "<<int(channel)<<". Dropping the note."<<endl;
                 break;
@@ -326,6 +371,7 @@ int main(int argc, char* argv[]) {
 
             opl->WriteReg(voice_base2[voice_num]+0xa0, (f_num&0xff));
             opl->WriteReg(voice_base2[voice_num]+0xb0, 0x20 + (block<<(2)) + ((f_num&0xff00)>>(8)));
+            writeVolume(voice_num);
             break;
         case midi_event::PROGRAM_CHANGE: //0xc0
             patch_assignment[channel] = v[1];
@@ -343,19 +389,48 @@ int main(int argc, char* argv[]) {
             cout<<dec<<"Program change: Channel "<<int(channel)<<"->"<<int(bank_assignment[channel])<<":"<<int(patch_assignment[channel])<<endl;
             break;
         case midi_event::CONTROL_CHANGE: //0xb0
+            cout<<"CC: "<<hex<<int(v[0])<<" "<<int(v[1])<<" "<<int(v[2]);
             meta = e->get_meta();
-            if(meta == 0x07) { //Volume change
-                channel_volume[channel] = v[2];
+            if(meta == 0x01) { //Modulation change (set vibrato if over 64)
+                channel_modulation[channel] = v[2];
                 for(int i=0;i<OPL_VOICE_COUNT;++i) {
+                    uint8_t patchNum = patch_assignment[channel];
+                    uint8_t bankNum = bank_assignment[channel];
                     if(opl_channel_assignment[i] == channel) {
-                        opl->WriteReg(voice_base[i] + 0x40 + 3, 63 - (channel_volume[channel] >> 1));
+                        for(auto& patch: uwpf.bank_data) {
+                            if(patch.patch == patchNum && patch.bank == bankNum) {
+                                opl->WriteReg(voice_base[i]+0x23,(patch.ad_patchdatastruct.car_freq_mult&0x0f) +
+                                                                ((patch.ad_patchdatastruct.car_env_scaling&1)<<(4)) +
+                                                                ((patch.ad_patchdatastruct.car_sustain_sound&1)<<(5)) +
+                                                                ((patch.ad_patchdatastruct.car_ampl_vibrato&1)<<(6)) +
+                                                                ((v[2] > 64) ? 128 : 0)); // freq vibrato
+                            }
+                        }
                     }
                 }
             }
-            else if(meta == 0x0a) { //Panning controll
+            else if(meta == 0x07) { //Volume change
+                channel_volume[channel] = v[2];
+                for(int i=0;i<OPL_VOICE_COUNT;++i) {
+                    if(opl_channel_assignment[i] == channel) {
+                        writeVolume(i);
+                        // opl->WriteReg(voice_base[i] + 0x40 + 3, 63 - (channel_volume[channel] >> 1));
+                    }
+                }
+            }
+            else if(meta == 0x0a) { //Panning control
                 for(int i=0;i<OPL_VOICE_COUNT;++i) {
                     if(opl_channel_assignment[i] == channel)
                         opl->SetPanning(channel, 0.5 * (1.0 - float(v[2])/MIDI_MAX_VAL), 0.5*(float(v[2])/MIDI_MAX_VAL));
+                }
+            }
+            else if(meta == 0x0b) { //Expression change (also influences volume)
+                channel_expression[channel] = v[2];
+                for(int i=0;i<OPL_VOICE_COUNT;++i) {
+                    if(opl_channel_assignment[i] == channel) {
+                        writeVolume(i);
+                        // opl->WriteReg(voice_base[i] + 0x40 + 3, 63 - (channel_volume[channel] >> 1));
+                    }
                 }
             }
             else if(meta == 0x72) { //Bank change

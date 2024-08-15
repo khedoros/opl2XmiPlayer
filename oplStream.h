@@ -12,11 +12,8 @@ class oplStream : public OPLEmul {
     private:
         YamahaYm3812 opl;
         static const int stereoChannels = 1;
-        static const int sampleRate = 49716;
-        // static const int sampleRate = 11025;
-        // static const int sampleRate = 44100;
-        static const int processPerSecond = 72;
-        // static const int processPerSecond = 100;
+        static const int sampleRate = OPL_SAMPLE_RATE;
+        static const int processPerSecond = 120;
         static const int sampleChunkSize = (sampleRate * stereoChannels) / processPerSecond;
         static const int sampleChunkTimeInMs = 1000 / processPerSecond;
         std::array<int16_t,sampleChunkSize> buffer;
@@ -30,13 +27,16 @@ class oplStream : public OPLEmul {
         ~oplStream() {
             std::cout<<"Deconstruct the stream\n";
         }
+        void play() {
+            SDL_PauseAudioDevice(sdlDevId, 0);
+        }
+        void pause() {
+            SDL_PauseAudioDevice(sdlDevId, 1);
+        }
         virtual void Reset() override {
             opl.Reset();
             remainingMilliseconds = 0;
-            SDL_PauseAudioDevice(sdlDevId, 1);
-        }
-        void play() {
-            SDL_PauseAudioDevice(sdlDevId, 0);
+            pause();
         }
         virtual void WriteReg(int reg, int v) override {
             opl.WriteReg(reg,v);
