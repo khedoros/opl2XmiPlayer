@@ -188,7 +188,6 @@ void writeVolume(uint8_t voice_num) {
     vol *= velocity; vol >>= 7;
     if(connection) { // additive operator, so scale modulating operator too
         uint16_t mod_vol = ~((vol * mod_tl) / 127);
-        assert(mod_vol <= 0x3f);
         opl->WriteReg(voice_base[voice_num]+0x40,(mod_vol & 0x3f) +
                                             ((mod_ksl & 0x3)<<(6)));
     }

@@ -307,7 +307,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                 }
             }
         }
-        buffer[i] = sample;
+        buffer[i] = sample << 2;
         if(audioChannels == 2) {
             buffer[i+1] = buffer[i];
         }
