@@ -117,7 +117,7 @@ bool uw_patch_file::load(std::string fna, std::string fnm /*= ""*/) {
     if(fnm != "" && !load_patches(inm)) return false;
     #ifdef STAND_ALONE_PATCH
     for(auto it = bank_data.begin(); it != bank_data.end(); ++it) {
-        std::cout<<"Bank: "<<int(it->bank)<<" Patch: "<<int(it->patch);
+        std::cout<<std::dec<<"Bank: "<<int(it->bank)<<" Patch: "<<int(it->patch);
         if(it->name != "") {
             std::cout<<" Name: "<<it->name;
         }

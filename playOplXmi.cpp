@@ -279,6 +279,7 @@ int main(int argc, char* argv[]) {
 
     //Look up the timbre->bank map in the xmi file
     pair<uint8_t,uint8_t> * p = xmifile.next_timbre();
+
     while(p != nullptr) {
         //Store the expected bank for this timbre
         timbre_bank[p->second] = p->first;
@@ -389,7 +390,7 @@ int main(int argc, char* argv[]) {
             cout<<dec<<"Program change: Channel "<<int(channel)<<"->"<<int(bank_assignment[channel])<<":"<<int(patch_assignment[channel])<<endl;
             break;
         case midi_event::CONTROL_CHANGE: //0xb0
-            cout<<"CC: "<<hex<<int(v[0])<<" "<<int(v[1])<<" "<<int(v[2]);
+            cout<<"CC: "<<hex<<int(v[0])<<" "<<int(v[1])<<" "<<int(v[2])<<endl;
             meta = e->get_meta();
             if(meta == 0x01) { //Modulation change (set vibrato if over 64)
                 channel_modulation[channel] = v[2];
