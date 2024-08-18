@@ -6,11 +6,10 @@
 #include<cstring>
 #include<SDL2/SDL.h>
 #include "opl.h"
-#include "yamahaYm3812.h"
 
 class oplStream : public OPLEmul {
     private:
-        YamahaYm3812 opl;
+        OPLEmul *opl;
         static const int stereoChannels = 1;
         static const int sampleRate = OPL_SAMPLE_RATE;
         static const int processPerSecond = 120;
@@ -21,7 +20,8 @@ class oplStream : public OPLEmul {
         int sdlDevId;
         bool stopped;
     public:
-        oplStream() : opl(stereoChannels == 2),remainingMilliseconds{0}, stopped{false} {
+        oplStream() : opl(YamahaYm3812Create(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false} {
+//        oplStream() : opl(JavaOPLCreate(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false} {
             std::cout<<"Init the stream to "<<stereoChannels<<" channels, "<<sampleRate<<"Hz sample rate\n";
             initSDLAudio();
             pause();
@@ -36,18 +36,18 @@ class oplStream : public OPLEmul {
             SDL_PauseAudioDevice(sdlDevId, 1);
         }
         virtual void Reset() override {
-            opl.Reset();
+            opl->Reset();
             remainingMilliseconds = 0;
             pause();
         }
         virtual void WriteReg(int reg, int v) override {
-            opl.WriteReg(reg,v);
+            opl->WriteReg(reg,v);
         }
         void addTime(int milliseconds) {
             remainingMilliseconds += milliseconds;
             while(!stopped && remainingMilliseconds >= sampleChunkTimeInMs) {
                 buffer.fill(0);
-                opl.Update(buffer.data(), sampleChunkSize / stereoChannels);
+                opl->Update(buffer.data(), sampleChunkSize / stereoChannels);
                 remainingMilliseconds -= sampleChunkTimeInMs;
                 SDL_QueueAudio(sdlDevId, buffer.data(), sampleChunkSize * sizeof(int16_t));
 
@@ -69,9 +69,9 @@ class oplStream : public OPLEmul {
             return SDL_GetQueuedAudioSize(sdlDevId);
         }
 
-        virtual void Update(float *buffer, int length) override {opl.Update(buffer,length);}
-        virtual void Update(int16_t *buffer, int length) override {opl.Update(buffer,length);}
-        virtual void SetPanning(int channel, float left, float right) override {opl.SetPanning(channel, left, right);}
+        virtual void Update(float *buffer, int length) override {opl->Update(buffer,length);}
+        virtual void Update(int16_t *buffer, int length) override {opl->Update(buffer,length);}
+        virtual void SetPanning(int channel, float left, float right) override {opl->SetPanning(channel, left, right);}
         int initSDLAudio() {
             int failure_code = SDL_Init(SDL_INIT_AUDIO);
             if(failure_code) {
