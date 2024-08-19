@@ -31,7 +31,7 @@ bool BinBuffer::is_good() {
     return good;
 }
 
-BinBuffer::BinBuffer() : data(0), it(0), good(false) {}
+BinBuffer::BinBuffer() : data(0), it{}, good(false) {}
 
 bool BinBuffer::load(binifstream& stream, std::pair<uint32_t,uint32_t> offset_length) {
     size_t bookmark = stream.tellg();

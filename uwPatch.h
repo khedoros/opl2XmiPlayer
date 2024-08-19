@@ -9,6 +9,22 @@ class binifstream;
 
 class uw_patch_file {
 public:
+    enum patchIndices {
+        datasize = 0, // 16-bit value
+        transpose = 2,
+        mod_avekm,
+        mod_ksl_tl,
+        mod_ad,
+        mod_sr,
+        mod_ws,
+        fb_c,
+        car_avekm,
+        car_ksl_tl,
+        car_ad,
+        car_sr,
+        car_ws
+    };
+
     struct __attribute__((packed)) opl2_patch {
     /*
        unsigned char mod_avekm;
