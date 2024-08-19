@@ -211,7 +211,7 @@ void YamahaYm3812::Update(float* buffer, int sampleCnt) {}
 void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
     for(int i=0;i<sampleCnt*audioChannels;i+=audioChannels) {
         std::lock_guard<std::mutex> guard(regMutex);
-        envCounter+=2;
+        envCounter++;
 
         int16_t sample = 0;
 
@@ -223,6 +223,12 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
             carOp.updateEnvelope(envCounter);
 
             if(carOp.envPhase != adsrPhase::silent) {
+                uint modKslAtten = 0;
+                uint carKslAtten = 0;
+                uint kslIndex = ((chan[ch].fNum >>6 ) + (chan[ch].octave << 4));
+                modKslAtten =  ((1 << modOp.keyScaleLevel) >> 1) * 8 * kslTable.at(kslIndex);
+                carKslAtten = ((1 << carOp.keyScaleLevel) >> 1) * 8 * kslTable[kslIndex];
+
                 modOp.phaseCnt += modOp.phaseInc;
                 int feedback = (chan[ch].feedbackLevel) ? ((modOp.modFB1 + modOp.modFB2) >> (8 - chan[ch].feedbackLevel)) : 0;
                 carOp.phaseCnt += carOp.phaseInc;
@@ -235,7 +241,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                 int modOut = lookupExp((modSin) +                                                // sine input
                                        amTable[modOp.amPhase] * tremoloMultiplier +            // AM volume attenuation (tremolo)
                                        (modOp.envLevel * 0x10) +                                // Envelope
-                                       //TODO: KSL
+                                       modKslAtten +                                         // Key Scale Level
                                        (modOp.totalLevel * 0x20));                         // Modulator volume
                 modOp.modFB1 = modOp.modFB2;
                 modOp.modFB2 = modOut;
@@ -249,7 +255,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                     sample+=lookupExp((carSin) +                                                  // sine input
                                         amTable[carOp.amPhase] * tremoloMultiplier +         // AM volume attenuation (tremolo)
                                         (carOp.envLevel * 0x10) +                                  // Envelope
-                                        //TODO: KSL
+                                        carKslAtten +                                         // Key Scale Level
                                         (carOp.totalLevel * 0x20));                         // Channel volume
                 }
                 else {
@@ -260,7 +266,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                     sample+=lookupExp((carSin) +                                                  // sine input
                                         amTable[carOp.amPhase] * tremoloMultiplier +          // AM volume attenuation (tremolo)
                                         (carOp.envLevel * 0x10) +                                  // Envelope
-                                        //TODO: KSL
+                                        carKslAtten +                                         // Key Scale Level
                                         (carOp.totalLevel * 0x20));                                // Channel volume
                     sample += modOut;
                 }
@@ -467,6 +473,17 @@ const std::array<std::array<int,8>,8> YamahaYm3812::fmTable {{
     {0, 3, 6, 3, 0,-3,-6,-3},
     {0, 3, 7, 3, 0,-3,-7,-3}
 }};
+
+const std::array<int,128> YamahaYm3812::kslTable {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 4, 5, 6, 7, 8,
+    0, 0, 0, 0, 0, 3, 5, 7, 8,10,11,12,13,14,15,16,
+    0, 0, 0, 5, 8,11,13,15,16,18,19,20,21,22,23,24,
+    0, 0, 8,13,16,19,21,23,24,26,27,28,29,30,31,32,
+    0, 8,16,21,24,27,29,31,32,34,35,36,37,38,39,40,
+    0,16,24,29,32,35,37,39,40,42,43,44,45,46,47,48,
+    0,24,32,37,40,43,45,47,48,50,51,52,53,54,55,56
+    };
 
 std::array<int,256> YamahaYm3812::logsinTable;
 std::array<int,256> YamahaYm3812::expTable;

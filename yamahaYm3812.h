@@ -48,6 +48,7 @@ private:
     static std::array<int,256> expTable;
     static const std::array<int,210> amTable;
     static const std::array<std::array<int,8>,8> fmTable;
+    static const std::array<int,128> kslTable;
     static const int NATIVE_SAMPLE_RATE = 49716;
 
     void initTables();
