@@ -50,6 +50,7 @@ std::array<uw_patch_file::patchdat*, MIDI_CHANNEL_COUNT> channel_patch;
 std::array<int8_t, MIDI_CHANNEL_COUNT> channel_modulation {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0};
 std::array<int8_t, MIDI_CHANNEL_COUNT> channel_volume     {127,127,127,127,127,127,127,127,127,127,127,127,127,127,127,127};
 std::array<int8_t, MIDI_CHANNEL_COUNT> channel_expression {127,127,127,127,127,127,127,127,127,127,127,127,127,127,127,127};
+std::array<int16_t, MIDI_CHANNEL_COUNT> channel_pitch { 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13, 1<<13 };
 
 const std::array<int8_t, 16> velocity_translation { 0x52, 0x55, 0x58, 0x5b, 0x5e, 0x61, 0x64, 0x67, 0x6a, 0x6d, 0x70, 0x73, 0x76, 0x79, 0x7c, 0x7f };
 
@@ -500,7 +501,8 @@ int main(int argc, char* argv[]) {
             }
             break;
         case midi_event::PITCH_WHEEL: //0xe0
-            std::cout<<"Pitch wheel unimplemented (value: "<<std::hex<<int(midi_data[0])<<" "<<int(midi_data[1])<<" "<<int(midi_data[2])<<")\n";
+            std::printf("Pitch Val: %04x\n", int(midi_data[2]) * 128 + midi_data[1]);
+            // std::cout<<"Pitch wheel unimplemented (value: "<<std::hex<<int(midi_data[0])<<" "<<int(midi_data[1])<<" "<<int(midi_data[2])<<")\n";
             break;
         default:
             std::cout<<"Not implemented, yet: "<<hex<<int(midi_data[0])<<" "<<int(midi_data[1])<<" "<<int(midi_data[2])<<'\n';

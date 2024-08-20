@@ -44,7 +44,7 @@ private:
 
     static const std::array<uint8_t, 16> multVal;
     static const std::array<std::string,5> rhythmNames;
-    static std::array<int,256> logsinTable;
+    static std::array<int,1024 * 4> logsinTable;
     static std::array<int,256> expTable;
     static const std::array<int,210> amTable;
     static const std::array<std::array<int,8>,8> fmTable;

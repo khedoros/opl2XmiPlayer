@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.5...3.28)
 project(opl2XmiPlayer LANGUAGES CXX)
 
-# set(SOURCES playOplXmi.cpp midiEvent.cpp util.cpp uwPatch.cpp xmi.cpp yamahaYm3812.cpp fmopl.cpp OPL3.cpp)
+# set(CMAKE_BUILD_TYPE Debug)
+# add_compile_definitions(_GLIBCXX_DEBUG)
 set(SOURCES playOplXmi.cpp midiEvent.cpp util.cpp uwPatch.cpp xmi.cpp yamahaYm3812.cpp)
 set(HEADERS midiEvent.h opl.h uwPatch.h util.h xmi.h yamahaYm3812.h)
 set(DROPLAY_SOURCES yamahaYm3812.cpp droPlay.cpp)

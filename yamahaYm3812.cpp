@@ -323,45 +323,43 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
 void YamahaYm3812::initTables() {
     for (int i = 0; i < 256; ++i) {
         logsinTable[i] = round(-log2(sin((double(i) + 0.5) * M_PI_2 / 256.0)) * 256.0);
+        logsinTable[511 - i] = logsinTable[i];
+        logsinTable[512 + i] = 0x8000 | logsinTable[i];
+        logsinTable[1023 - i] = logsinTable[512+i];
         expTable[i] = round(exp2(double(i) / 256.0) * 1024.0) - 1024.0;
+    }
+    for(int i = 0; i < 1024; ++i) {
+        bool sign = i & 512;
+        bool mirror = i & 256;
+        for(int wf=0;wf<4;wf++) {
+            switch(wf) {
+                case 0: break; // full sine wave; already covered.
+                case 1: // half sine wave (positive half, set negative half to 0)
+                    if(!sign) logsinTable[wf*1024+i] = logsinTable[i];
+                    else      logsinTable[wf*1024+i] = 0x8000; // constant for -0 value
+                    break;
+                case 2: // rectified sine wave (double-bumps)
+                    logsinTable[wf*1024+i] = logsinTable[i & 511];
+                    break;
+                case 3: // pseudo-saw (only the 1st+3rd quarters of the wave is defined, and are both positive)
+                    if(!mirror) logsinTable[wf*1024+i] = logsinTable[i&255];
+                    else        logsinTable[wf*1024+i] = 0x8000;
+            }
+        }
+
     }
 }
 
 int YamahaYm3812::lookupSin(int val, int wf) {
-    bool sign   = val & 512;
-    bool mirror = val & 256;
-    val &= 255;
-    int result = logsinTable[mirror ? val ^ 255 : val];
-    switch(wf) {
-        case 0: // full sine wave
-            if(sign) result |= 0x8000;
-            break;
-        case 1: // half sine wave (positive half, set negative half to 0)
-            if(sign) {
-                result = 0;
-                result |= 0x8000; // vague memory that it uses -0, not +0
-            }
-            break;
-        case 2: // rectified sine wave (double-bumps)
-            // Just don't set the sign negative for anything
-            break;
-        case 3: // rectified sine wave, rises only
-            if(mirror) {
-                result = 0;
-                result |= 0x8000; // vague memory that it uses -0, not +0
-            }
-            break;
-    }
-    return result;
+    val &= 1023;
+    return logsinTable[1024 * wf + val];
 }
 
 int YamahaYm3812::lookupExp(int val) {
     bool sign = val & 0x8000;
-    // int t = (expTable[(val & 255) ^ 255] << 1) | 0x800;
     int t = (expTable[(val & 255) ^ 255] | 1024) << 1;
     int result = (t >> ((val & 0x7F00) >> 8)) >> 2;
     if (sign) result = ~result;
-    // std::cout<<"EXPOUT "<<result<<'\n';
     return result;
 }
 
@@ -485,7 +483,7 @@ const std::array<int,128> YamahaYm3812::kslTable {
     0,24,32,37,40,43,45,47,48,50,51,52,53,54,55,56
     };
 
-std::array<int,256> YamahaYm3812::logsinTable;
+std::array<int,1024*4> YamahaYm3812::logsinTable;
 std::array<int,256> YamahaYm3812::expTable;
 const std::array<uint8_t,16> YamahaYm3812::multVal {1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20, 24, 24, 30, 30};
 const int YamahaYm3812::NATIVE_SAMPLE_RATE;
