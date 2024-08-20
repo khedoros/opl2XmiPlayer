@@ -64,7 +64,7 @@ bool load(string fn) {
         if(reg > code_cnt - 1 && reg != sh_delay && reg != lng_delay) {
             cout<<"Error: Invalid register code. Bailing."<<endl; return false; 
         }
-        cout<<hex<<"Reg: "<<setw(2)<<int(reg_trans[reg])<<" Val: "<<setw(2)<<int(val)<<dec<<'\n';
+
         if(reg == sh_delay) {
             cout<<" Delay "<<int(val)+1<<"ms"<<endl;
             opl2.addTime(int(val)+1);
@@ -74,6 +74,7 @@ bool load(string fn) {
             opl2.addTime((int(val)+1) * 256);
         }
         else {
+            cout<<hex<<"Reg: "<<setw(2)<<int(reg_trans[reg])<<" Val: "<<setw(2)<<int(val)<<dec<<'\n';
             if(!card) {
                 opl2.WriteReg(reg_trans[reg],val);
             }
