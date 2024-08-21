@@ -77,7 +77,7 @@ private:
         bool releaseSustain;   //1=key-off has release-rate at 5, 0=key-off has release rate at 7 (both with KSR adjustment)
 
         adsrPhase envPhase;
-        unsigned int envLevel; // 0 - 127. 0.375dB steps (add envLevel * 0x10)
+        int envLevel; // 0 - 127. 0.375dB steps (add envLevel * 0x10)
 
         //reg base 20
         bool amActive;           //tremolo (amplitude variance) @ 3.7Hz
@@ -113,11 +113,11 @@ private:
     struct chan_t {
         unsigned fNum: 10; // 2nd of 3 elements that define the frequency
         bool keyOn; //on-off state of the key
-        unsigned int octave; //3rd element that defines the frequency
+        unsigned int octave: 3; //3rd element that defines the frequency
         unsigned feedbackLevel: 3; // feedback level of first slot
         connectionType conn;
 
-        unsigned kslIndex; // Index to the KSL table
+        unsigned kslIndex: 7; // Index to the KSL table
 
         op_t modOp;
         op_t carOp;

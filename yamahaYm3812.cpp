@@ -37,6 +37,8 @@ void YamahaYm3812::Reset() {
         chan[ch].carOp.amPhase = 0;
         chan[ch].carOp.amAtten = 0;
         chan[ch].carOp.fmPhase = 0;
+
+        chan[ch].kslIndex = 0;
     }
 }
 
@@ -330,7 +332,8 @@ void YamahaYm3812::initTables() {
         logsinTable[511 - i] = logsinTable[i];
         logsinTable[512 + i] = 0x8000 | logsinTable[i];
         logsinTable[1023 - i] = logsinTable[512+i];
-        expTable[i] = round(exp2(double(i) / 256.0) * 1024.0) - 1024.0;
+        // expTable[i] = round(exp2(double(i) / 256.0) * 1024.0) - 1024.0;
+        expTable[255-i] = int(round(exp2(double(i) / 256.0) * 1024.0)) << 1;
     }
     for(int i = 0; i < 1024; ++i) {
         bool sign = i & 512;
@@ -361,10 +364,17 @@ int YamahaYm3812::lookupSin(int val, int wf) {
 
 int YamahaYm3812::lookupExp(int val) {
     bool sign = val & 0x8000;
+    int t = expTable[(val & 255)];
+    int result = (t >> ((val & 0x7F00) >> 8)) >> 2;
+    if (sign) result = ~result;
+    return result;
+/*
+    bool sign = val & 0x8000;
     int t = (expTable[(val & 255) ^ 255] | 1024) << 1;
     int result = (t >> ((val & 0x7F00) >> 8)) >> 2;
     if (sign) result = ~result;
     return result;
+*/
 }
 
 int YamahaYm3812::convertWavelength(int wavelength) {
@@ -441,8 +451,7 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter, unsigned int tremo
         }
     }
 
-    //if(envLevel > 127) std::cout<<std::dec<<"Env at "<<envLevel<<"\n";
-    if(envLevel > 130) envLevel = 0; // assume wrap-around
+    if(envLevel < 0) envLevel = 0; // assume wrap-around
     else if(envLevel > 127) envLevel = 127; //assume it just overflowed the 7-bit value
 }
 
