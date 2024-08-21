@@ -57,13 +57,14 @@ private:
     int convertWavelength(int wavelength);
 
     struct op_t {
-        void updateEnvelope(unsigned int envCounter);
+        void updateEnvelope(unsigned int envCounter, unsigned int tremoloMultipler);
         int lfsrStepGalois();
         unsigned phaseInc:20;    // Basically the frequency, generated from the instrument's mult, and the fNum and octave/block for the channel
         unsigned phaseCnt:20;    // Current place in the sine phase. 10.10 fixed-point number, where the whole selects the sine sample to use
 
         int amPhase; // index into the amTable, for how deep to currently apply the AM value
         static const int amPhaseSampleLength = (OPL_SAMPLE_RATE * 64) / NATIVE_SAMPLE_RATE; // Number of samples between progressing to a new index
+        int amAtten; // current AM (tremolo) attenuation level
 
         // TODO: FM/vibrato state. vibPhase is a placeholder.
         int fmPhase;
@@ -88,6 +89,7 @@ private:
         //reg base 40
         unsigned keyScaleLevel:2; //KSL: modify volume based on frequency
         unsigned totalLevel:6;    // level for the operator, 0.75dB steps (add totalLevel * 0x20 to output value)
+        unsigned kslAtten;        // level of attenuation due to KSL
 
         //reg base 60
         unsigned attackRate:4;
@@ -114,6 +116,8 @@ private:
         unsigned int octave; //3rd element that defines the frequency
         unsigned feedbackLevel: 3; // feedback level of first slot
         connectionType conn;
+
+        unsigned kslIndex; // Index to the KSL table
 
         op_t modOp;
         op_t carOp;

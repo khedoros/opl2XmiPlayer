@@ -501,8 +501,14 @@ int main(int argc, char* argv[]) {
             }
             break;
         case midi_event::PITCH_WHEEL: //0xe0
-            std::printf("Pitch Val: %04x\n", int(midi_data[2]) * 128 + midi_data[1]);
-            // std::cout<<"Pitch wheel unimplemented (value: "<<std::hex<<int(midi_data[0])<<" "<<int(midi_data[1])<<" "<<int(midi_data[2])<<")\n";
+        {
+            int pitch = int(midi_data[2]) * 128 + midi_data[1];
+            pitch -= 0x2000; // since it's a signed 14-bit number
+            pitch /= 0x20; // Puts it into the range -0x100 -> 0x100
+            pitch *= 12; // 12 semitones, default pitch range, value -0xc00->0xc00
+            channel_pitch[channel] = pitch;
+            std::cout<<"Unused pitch change: channel "<<std::dec<<channel+1<<": "<<pitch<<'\n';
+        }
             break;
         default:
             std::cout<<"Not implemented, yet: "<<hex<<int(midi_data[0])<<" "<<int(midi_data[1])<<" "<<int(midi_data[2])<<'\n';
