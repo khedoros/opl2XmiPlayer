@@ -47,7 +47,7 @@ private:
     static std::array<int,1024 * 4> logsinTable;
     static std::array<int,256> expTable;
     static const std::array<int,210> amTable;
-    static const std::array<std::array<int,8>,8> fmTable;
+    static const std::array<int,64> fmTable;
     static const std::array<int,128> kslTable;
     static const int NATIVE_SAMPLE_RATE = 49716;
 
@@ -57,7 +57,7 @@ private:
     int convertWavelength(int wavelength);
 
     struct op_t {
-        void updateEnvelope(unsigned int envCounter, unsigned int tremoloMultipler);
+        void updateEnvelope(unsigned int envCounter, unsigned int tremoloMultipler, unsigned int vibratoMultiplier);
         int lfsrStepGalois();
         unsigned phaseInc:20;    // Basically the frequency, generated from the instrument's mult, and the fNum and octave/block for the channel
         unsigned phaseCnt:20;    // Current place in the sine phase. 10.10 fixed-point number, where the whole selects the sine sample to use
@@ -66,11 +66,13 @@ private:
         static const int amPhaseSampleLength = (OPL_SAMPLE_RATE * 64) / NATIVE_SAMPLE_RATE; // Number of samples between progressing to a new index
         int amAtten; // current AM (tremolo) attenuation level
 
-        // TODO: FM/vibrato state. vibPhase is a placeholder.
-        int fmPhase;
+        // FM/vibrato state tracking.
+        int fmRow; // fmRow is decided by the top 3 bits of the current fNum for the channel
+        int fmPhase; // vibrato has 8 phases
+        int fmShift; // current FM (vibrato) phase shift level
         static const int fmPhaseSampleLength = (OPL_SAMPLE_RATE * 1024) / NATIVE_SAMPLE_RATE;
 
-        // TODO: Modulator feedback state.
+        // Modulator feedback state.
         int modFB1;
         int modFB2;
 
