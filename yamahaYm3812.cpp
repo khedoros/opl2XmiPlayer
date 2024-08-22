@@ -200,6 +200,9 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                         // Modulator Operator
                         if(chan[chNum].modOp.envPhase == adsrPhase::silent) {
                             chan[chNum].modOp.envPhase = adsrPhase::attack;
+                            if(chan[chNum].modOp.attackRate == 15) {
+                                chan[chNum].modOp.envLevel = 0;
+                            }
                         }
                         else {
                             chan[chNum].modOp.envPhase = adsrPhase::dampen;
@@ -208,6 +211,9 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                         // Carrier Operator
                         if(chan[chNum].carOp.envPhase == adsrPhase::silent) {
                             chan[chNum].carOp.envPhase = adsrPhase::attack;
+                            if(chan[chNum].carOp.attackRate == 15) {
+                                chan[chNum].carOp.envLevel = 0;
+                            }
                             printf("APU::YM3812 melody chan %d attack key-on\n", chNum);
                         }
                         else {
@@ -391,6 +397,7 @@ int YamahaYm3812::convertWavelength(int wavelength) {
 }
 
 void YamahaYm3812::op_t::updateEnvelope(unsigned int counter, unsigned int tremoloMultiplier, unsigned int vibratoMultiplier) {
+    if(envPhase == adsrPhase::silent) { return; }
     if(amActive && counter % amPhaseSampleLength == 0) {
         amPhase++;
         if(amPhase == amTable.size()) {
@@ -406,63 +413,120 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter, unsigned int tremo
         }
         fmShift = fmTable[fmRow + fmPhase] * vibratoMultiplier;
     }
-    
-    if(envPhase == adsrPhase::dampen && envLevel >= 123) { // Dampened previous note, start attack of new note
-        envPhase = adsrPhase::attack;
-    }
-    else if(envPhase == adsrPhase::attack && (envLevel > 130)) { 
-        envPhase = adsrPhase::decay;
-    }
-    else if(envPhase == adsrPhase::decay && envLevel >= sustainLevel * 8) {
-            envPhase = adsrPhase::sustainRelease;
-            envLevel = sustainLevel * 8;
-    }
-    else if((envPhase == adsrPhase::sustainRelease || envPhase == adsrPhase::release) && envLevel >= 123) {
-        envPhase = adsrPhase::silent;
-    }
 
-    int activeRate = 0;
-    switch(envPhase) {
-        case adsrPhase::silent: activeRate = 0; break;
-        case adsrPhase::dampen: activeRate = 12; break;
-        case adsrPhase::attack: activeRate = -attackRate; break;
-        case adsrPhase::decay:  activeRate = decayRate; break;
-        case adsrPhase::sustain: activeRate = 0; break;
-        case adsrPhase::sustainRelease: activeRate = releaseRate; break;
-        case adsrPhase::release:
-            if(releaseSustain) activeRate = 5;
-            else        activeRate = 7;
-            break;
-        default: activeRate = 0;
-            std::cout<<"Unhandled envPhase: "<<envPhase<<"\n";
-            break;
-    }
+    // Maximum envelope level reached at envLevel=124 (-45dB) or higher
+    bool maxEnv = (envLevel >> 2) == 0x1F;
 
-    int changeAmount = 1;
-    if(envPhase == adsrPhase::attack) {
-        if(activeRate == -15) {
+    if ((envPhase == adsrPhase::dampen) && maxEnv) {
+        if(attackRate == 15) {
             envLevel = 0;
+            envPhase = adsrPhase::decay;
         }
-        else {
-            envLevel += activeRate;
-        }
-    }
-    else if(activeRate == 0) changeAmount = 0;
-    else if(activeRate == 15) {
-        changeAmount = 2;
-    }
-
-              //    0      1      2     3     4     5     6     7    8   9   a   b   c  d  e  f
-    int checks[] {65536, 32768, 16384, 8192, 4096, 2048, 1024, 236, 128, 64, 32, 16, 8, 4, 2, 1};
-
-    if(!(counter & (checks[activeRate] - 1))) {
-        if(envPhase != adsrPhase::attack) {
-            envLevel += changeAmount;
-        }
+        else envPhase = adsrPhase::attack;
+    } else if ((envPhase == adsrPhase::attack) && (envLevel == 0)) {
+        envPhase = adsrPhase::decay;
+    } else if ((envPhase == adsrPhase::decay) && ((envLevel >> 3) == sustainLevel)) {
+        envPhase = adsrPhase::sustain;
     }
 
-    if(envLevel < 0) envLevel = 0; // assume wrap-around
-    else if(envLevel > 127) envLevel = 127; //assume it just overflowed the 7-bit value
+    // adsrPhase::release is set from outside of the envelope control
+
+    // Attack or decay, and at what rate?
+    bool attack;
+    uint8_t basicRate; //4-bit value
+
+    switch(envPhase) {
+        case adsrPhase::dampen:
+            attack = false;
+            basicRate = 12;
+            break;
+        case adsrPhase::attack:
+            attack = true;
+            basicRate = attackRate;
+            break;
+        case adsrPhase::decay:
+            attack = false;
+            basicRate = decayRate;
+            break;
+        case adsrPhase::sustain:
+            attack = false;
+            basicRate = sustain ? 0 : releaseRate;
+            break;
+        case adsrPhase::release:
+            attack = false;
+            basicRate = releaseRate;
+        break;
+    }
+
+    // TODO: Proper KSR implementation
+    uint8_t ksr = 0;
+    uint8_t rate = std::min(63, basicRate * 4 + ksr);
+    uint8_t row = rate & 3;
+
+    static const std::array<uint8_t,32> egTable {
+        0, 1, 0, 1, 0, 1, 0, 1, //  4 out of 8
+        0, 1, 0, 1, 1, 1, 0, 1, //  5 out of 8
+        0, 1, 1, 1, 0, 1, 1, 1, //  6 out of 8
+        0, 1, 1, 1, 1, 1, 1, 1, //  7 out of 8
+    };
+
+    uint8_t column = 0;
+    if(attack) {
+        switch (rate / 4) {
+            case 15: // verified on real YM2413: rate=15 behaves the same as rate=0
+                     // rate=15 is normally handled by skipping attack completely,
+                     // so this case can only trigger when rate was changed during attack.
+            case 0:  // rates 0..3, envelope doesn't change
+                break;
+            default:
+                { // rates 4..47
+                    // perform a 'env' step this iteration?
+                    uint8_t shift = 13 - (rate / 4);
+                    int mask = ((1 << shift) - 1) & ~3; // ignore lower 2 bits!
+                    if ((counter & mask) != 0) break;
+                    column = (counter >> shift) & 7;
+                    if (egTable[row*8+column]) {
+                            envLevel = envLevel - (envLevel >> 4) - 1;
+                    }
+                    break;
+                }
+            case 12: // rates 48..51
+            case 13: // rates 52..55
+            case 14:
+                { // rates 56..59
+                    column = (counter & 0xc) >> 1;
+                    int m = 16 - (rate / 4);
+                    m -= egTable[row*8+column];
+                    envLevel = envLevel - (envLevel >> m) - 1;
+                    break;
+                }
+        }
+    }
+    else {
+        switch(rate / 4) {
+            case 0: break; // no change during rates 0..3
+            default: { // rates 4..51
+                uint8_t shift = 13 - (rate / 4);
+                int mask = (1 << shift) - 1;
+                if ((counter & mask) != 0) break;
+                column = (counter >> shift) & 7;
+                envLevel = std::min(127, envLevel + egTable[row*8+column]);
+                break;
+            }
+            case 13: // rates 52..55, weird 16-sample period
+                column = ((counter & 0xc) >> 1) | (counter & 1);
+                envLevel = std::min(127, envLevel + egTable[row*8+column]);
+                break;
+            case 14: // rates 56..59, 16-sample period, incr by either 1 or 2
+                column = ((counter & 0xc) >> 1);
+                envLevel = std::min(127, envLevel + egTable[row*8+column] + 1);
+                break;
+            case 15: // rates 60..63, always increase by 2
+                envLevel = std::min(127, envLevel + 2);
+                break;
+
+        }
+    }
 }
 
 int YamahaYm3812::op_t::lfsrStepGalois() {
