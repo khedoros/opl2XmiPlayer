@@ -147,11 +147,17 @@ bool uw_patch_file::load(std::string fna, std::string fnm /*= ""*/) {
 std::string uw_patch_file::getName(int bank, int patch) {
     switch(bank) {
         case 0:
-            return melodyInstruments.at(patch);
+            if(patch < melodyInstruments.size())
+                return melodyInstruments.at(patch);
+            break;
         case 1:
-            return tvfxInstruments.at(patch);
+            if(patch < tvfxInstruments.size())
+                return tvfxInstruments.at(patch);
+            break;
         case 127:
-            return rhythmInstruments.at(patch);
+            if(patch < rhythmInstruments.size())
+                return rhythmInstruments.at(patch);
+            break;
     }
     return "";
 }
