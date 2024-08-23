@@ -99,6 +99,10 @@ void YamahaYm3812::WriteReg(int reg, int val) {
 
                 op.sustain = static_cast<bool>(val & 0x20);
                 op.keyScaleRate = static_cast<bool>(val & 0x10);
+                {
+                    int ksrNote = ((chan[chNum].fNum >> 9) + (chan[chNum].octave << 1));
+                    op.ksrIndex = chan[chNum].carOp.keyScaleRate ? ksrNote : ksrNote>>2;
+                }
                 op.freqMult = (val & 0x0f);
                 op.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[op.freqMult]) << chan[chNum].octave));
                 break;
@@ -185,6 +189,11 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 chan[chNum].modOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].modOp.freqMult]) << chan[chNum].octave));
                 chan[chNum].carOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].carOp.freqMult]) << chan[chNum].octave));
                 chan[chNum].kslIndex = ((chan[chNum].fNum >>6 ) + (chan[chNum].octave << 4));
+                {
+                    int ksrNote = ((chan[chNum].fNum >> 9) + (chan[chNum].octave << 1));
+                    chan[chNum].carOp.ksrIndex = chan[chNum].carOp.keyScaleRate ? ksrNote : ksrNote>>2;
+                    chan[chNum].modOp.ksrIndex = chan[chNum].modOp.keyScaleRate ? ksrNote : ksrNote>>2;
+                }
                 chan[chNum].modOp.kslAtten = ((1 << chan[chNum].modOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
                 chan[chNum].carOp.kslAtten = ((1 << chan[chNum].carOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
                 chan[chNum].carOp.fmRow = (chan[chNum].fNum >> 4) & 0b111000;
@@ -445,10 +454,8 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter, unsigned int tremo
         envAccum += envAccumRate;
         int targetValue = 0;
         if(attack && activeRate != 0 && activeRate != 15) {
-            std::array<int, 15> attackTable { 
-                12578, 6289, 3144, 1572, 786, 393, 196, 98, 49, 24, 12, 6, 3, 1, 0
-            };
-            targetValue = attackTable[activeRate - 1];
+            int index = std::min(63, activeRate * 4 + ksrIndex);
+            targetValue = attackTable[index];
             if(envAccum >= targetValue) {
                 envLevel -= (envAccum / targetValue);
                 envAccum -= (envAccum / targetValue) * targetValue;
@@ -458,10 +465,8 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter, unsigned int tremo
             envLevel = 0;
         }
         else {
-            std::array<float, 15> decayTable { 
-                176740, 88370, 44185, 22092, 11046, 5523, 2761, 1380, 690, 345, 172, 86, 43, 21, 18
-            };
-            targetValue = decayTable[activeRate - 1];
+            int index = std::min(63, activeRate * 4 + ksrIndex);
+            targetValue = decayTable[index];
             if(envAccum >= targetValue) {
                 envLevel += (envAccum / targetValue);
                 envAccum -= (envAccum / targetValue) * targetValue;
@@ -514,6 +519,44 @@ const std::array<int,128> YamahaYm3812::kslTable {
     0,16,24,29,32,35,37,39,40,42,43,44,45,46,47,48,
     0,24,32,37,40,43,45,47,48,50,51,52,53,54,55,56
     };
+
+const std::array<int,64> YamahaYm3812::attackTable {
+    0, 0, 0, 0,
+    22254, 17739, 14836, 12578, 
+    11127, 8869, 7418, 6289, 
+    5563, 4435, 3709, 3145, 
+    2782, 2217, 1854, 1572, 
+    1391, 1109, 927, 786, 
+    695, 554, 464, 393, 
+    348, 277, 232, 197, 
+    174, 139, 116, 98, 
+    87, 69, 58, 49, 
+    43, 35, 29, 25, 
+    22, 17, 14, 12, 
+    11, 9, 7, 6, 
+    6, 5, 4, 3, 
+    3, 2, 2, 2, 
+    2, 2, 2, 2
+};
+
+const std::array<int,64> YamahaYm3812::decayTable {
+    0, 0, 0, 0,
+    309296, 247373, 206090, 176741, 
+    154648, 123686, 103045, 88370, 
+    77324, 61843, 51523, 44185, 
+    38662, 30922, 25761, 22093, 
+    19331, 15461, 12881, 11046, 
+    9666, 7730, 6440, 5523, 
+    4833, 3865, 3220, 2762, 
+    2416, 1933, 1610, 1381, 
+    1208, 966, 805, 690, 
+    604, 483, 403, 345, 
+    302, 242, 201, 173, 
+    151, 121, 101, 86, 
+    76, 60, 50, 43, 
+    38, 30, 25, 22, 
+    19, 19, 19, 19,
+};
 
 std::array<int,1024*4> YamahaYm3812::logsinTable;
 std::array<int,256> YamahaYm3812::expTable;

@@ -49,6 +49,8 @@ private:
     static const std::array<int,210> amTable;
     static const std::array<int,64> fmTable;
     static const std::array<int,128> kslTable;
+    static const std::array<int,64> attackTable;
+    static const std::array<int,64> decayTable;
     static const int NATIVE_SAMPLE_RATE = 49716;
     static const int envAccumRate = 1'000'000 / OPL_SAMPLE_RATE;
 
@@ -94,6 +96,7 @@ private:
         unsigned keyScaleLevel:2; //KSL: modify volume based on frequency
         unsigned totalLevel:6;    // level for the operator, 0.75dB steps (add totalLevel * 0x20 to output value)
         unsigned kslAtten;        // level of attenuation due to KSL
+        unsigned ksrIndex:4;      // ksr adjustment to attack/decay rates
 
         //reg base 60
         unsigned attackRate:4;
@@ -121,7 +124,8 @@ private:
         unsigned feedbackLevel: 3; // feedback level of first slot
         connectionType conn;
 
-        unsigned kslIndex: 7; // Index to the KSL table
+        unsigned kslIndex: 7; // Index to the KSL table (scales volume level by note)
+        unsigned ksrIndex: 4; // Index to the KSR table (scales envelope by note)
 
         op_t modOp;
         op_t carOp;
