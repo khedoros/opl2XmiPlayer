@@ -410,54 +410,62 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter, unsigned int tremo
     if(envPhase == adsrPhase::dampen && envLevel >= 123) { // Dampened previous note, start attack of new note
         envPhase = adsrPhase::attack;
     }
-    else if(envPhase == adsrPhase::attack && (envLevel > 130)) { 
+    else if(envPhase == adsrPhase::attack && (envLevel <= 0)) { 
         envPhase = adsrPhase::decay;
+        envLevel = 0;
     }
     else if(envPhase == adsrPhase::decay && envLevel >= sustainLevel * 8) {
-            envPhase = adsrPhase::sustainRelease;
+        if(sustain) {
+            envPhase = adsrPhase::sustain;
             envLevel = sustainLevel * 8;
+        }
+        else {
+            envPhase = adsrPhase::release;
+        }
     }
-    else if((envPhase == adsrPhase::sustainRelease || envPhase == adsrPhase::release) && envLevel >= 123) {
+    else if((envPhase == adsrPhase::sustain || envPhase == adsrPhase::release) && envLevel >= 123) {
         envPhase = adsrPhase::silent;
     }
 
     int activeRate = 0;
+    bool attack = false;
     switch(envPhase) {
         case adsrPhase::silent: activeRate = 0; break;
         case adsrPhase::dampen: activeRate = 12; break;
-        case adsrPhase::attack: activeRate = -attackRate; break;
+        case adsrPhase::attack: activeRate = attackRate; attack = true; break;
         case adsrPhase::decay:  activeRate = decayRate; break;
         case adsrPhase::sustain: activeRate = 0; break;
-        case adsrPhase::sustainRelease: activeRate = releaseRate; break;
-        case adsrPhase::release:
-            if(releaseSustain) activeRate = 5;
-            else        activeRate = 7;
-            break;
+        case adsrPhase::release: activeRate = releaseRate; break;
         default: activeRate = 0;
             std::cout<<"Unhandled envPhase: "<<envPhase<<"\n";
             break;
     }
 
-    int changeAmount = 1;
-    if(envPhase == adsrPhase::attack) {
-        if(activeRate == -15) {
+    if(activeRate != 0) {
+        envAccum += envAccumRate;
+        int targetValue = 0;
+        if(attack && activeRate != 0 && activeRate != 15) {
+            std::array<int, 15> attackTable { 
+                12578, 6289, 3144, 1572, 786, 393, 196, 98, 49, 24, 12, 6, 3, 1, 0
+            };
+            targetValue = attackTable[activeRate - 1];
+            if(envAccum >= targetValue) {
+                envLevel -= (envAccum / targetValue);
+                envAccum -= (envAccum / targetValue) * targetValue;
+            }
+        }
+        else if(attack && activeRate == 15) {
             envLevel = 0;
         }
         else {
-            envLevel += activeRate;
-        }
-    }
-    else if(activeRate == 0) changeAmount = 0;
-    else if(activeRate == 15) {
-        changeAmount = 2;
-    }
-
-              //    0      1      2     3     4     5     6     7    8   9   a   b   c  d  e  f
-    int checks[] {65536, 32768, 16384, 8192, 4096, 2048, 1024, 236, 128, 64, 32, 16, 8, 4, 2, 1};
-
-    if(!(counter & (checks[activeRate] - 1))) {
-        if(envPhase != adsrPhase::attack) {
-            envLevel += changeAmount;
+            std::array<float, 15> decayTable { 
+                176740, 88370, 44185, 22092, 11046, 5523, 2761, 1380, 690, 345, 172, 86, 43, 21, 18
+            };
+            targetValue = decayTable[activeRate - 1];
+            if(envAccum >= targetValue) {
+                envLevel += (envAccum / targetValue);
+                envAccum -= (envAccum / targetValue) * targetValue;
+            }
         }
     }
 

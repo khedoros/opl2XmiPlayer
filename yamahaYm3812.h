@@ -50,6 +50,7 @@ private:
     static const std::array<int,64> fmTable;
     static const std::array<int,128> kslTable;
     static const int NATIVE_SAMPLE_RATE = 49716;
+    static const int envAccumRate = 1'000'000 / OPL_SAMPLE_RATE;
 
     void initTables();
     int lookupSin(int val, int waveForm);
@@ -80,6 +81,7 @@ private:
 
         adsrPhase envPhase;
         int envLevel; // 0 - 127. 0.375dB steps (add envLevel * 0x10)
+        int envAccum; // microsecond count for envLevel increment/decrement
 
         //reg base 20
         bool amActive;           //tremolo (amplitude variance) @ 3.7Hz
