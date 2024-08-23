@@ -189,6 +189,7 @@ public:
     }
 
     bool load(std::string fna, std::string fnm = "");
+    static std::string getName(int bank, int patch);
 
     std::vector<patchdat> bank_data;
 

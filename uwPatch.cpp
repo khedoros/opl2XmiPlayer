@@ -1,5 +1,6 @@
 #include "util.h"
 #include "uwPatch.h"
+#include "uwPatchNames.h"
 #include <cstring>
 #include <iostream>
 #include <iomanip>
@@ -26,6 +27,9 @@ void uw_patch_file::patchdat::setpat(std::vector<uint8_t> d, uint8_t b, uint8_t 
         memcpy(reinterpret_cast<void *>(&ad_patchdatastruct), reinterpret_cast<void *>(&(d[0])), d.size());
         ad_patchdata = d;
         has_opl2 = true;
+        if(name == "") {
+            name = getName(bank,patch);
+        }
         /* std::cout<<"Added Adlib Patch data"<<std::endl;*/
     }
     else if(d.size() == 0xf8) {
@@ -138,6 +142,18 @@ bool uw_patch_file::load(std::string fna, std::string fnm /*= ""*/) {
     }
     #endif
     return true;
+}
+
+std::string uw_patch_file::getName(int bank, int patch) {
+    switch(bank) {
+        case 0:
+            return melodyInstruments.at(patch);
+        case 1:
+            return tvfxInstruments.at(patch);
+        case 127:
+            return rhythmInstruments.at(patch);
+    }
+    return "";
 }
 
 #ifdef STAND_ALONE_PATCH
