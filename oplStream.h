@@ -19,8 +19,9 @@ class oplStream : public OPLEmul {
         int remainingMilliseconds;
         int sdlDevId;
         bool stopped;
+        bool handleEvents;
     public:
-        oplStream() : opl(YamahaYm3812Create(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false} {
+        oplStream(bool doEvents = true) : opl(YamahaYm3812Create(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false}, handleEvents{doEvents} {
 //        oplStream() : opl(JavaOPLCreate(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false} {
             std::cout<<"Init the stream to "<<stereoChannels<<" channels, "<<sampleRate<<"Hz sample rate\n";
             initSDLAudio();
@@ -51,16 +52,19 @@ class oplStream : public OPLEmul {
                 remainingMilliseconds -= sampleChunkTimeInMs;
                 SDL_QueueAudio(sdlDevId, buffer.data(), sampleChunkSize * sizeof(int16_t));
 
-                while(SDL_GetQueuedAudioSize(sdlDevId) > 100 * sampleChunkSize * sizeof(int16_t)) {
-                    SDL_Event event;
-                    while(SDL_PollEvent(&event)) {
-                        switch(event.type) {
-                        case SDL_QUIT:
-                            SDL_PauseAudio(true);
-                            SDL_Quit();
-                            stopped = true;
+                while(SDL_GetQueuedAudioSize(sdlDevId) > 5 * sampleChunkSize * sizeof(int16_t)) {
+                    if(handleEvents) {
+                        SDL_Event event;
+                        while(SDL_PollEvent(&event)) {
+                            switch(event.type) {
+                            case SDL_QUIT:
+                                SDL_PauseAudio(true);
+                                SDL_Quit();
+                                stopped = true;
+                            }
                         }
                     }
+                    // std::cout<<"Pause for"<<sampleChunkTimeInMs<<"ms...";
                     SDL_Delay(sampleChunkTimeInMs);
                 }
             }

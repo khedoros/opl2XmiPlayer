@@ -318,7 +318,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                         modOut = lookupExp((modSin) +                                                // sine input
                                            modOp->amAtten +                                          // AM volume attenuation (tremolo)
                                            (modOp->envLevel * 0x10) +                                // Envelope
-                                           //TODO: KSL
+                                           modOp->kslAtten +
                                            (modOp->totalLevel * 0x20));                              // Modulator volume
                         modOp->modFB1 = modOp->modFB2;
                         modOp->modFB2 = modOut;
@@ -332,7 +332,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                     sample+=    lookupExp((carSin) +                                                 // sine input
                                          carOp->amAtten +                                            // AM volume attenuation (tremolo)
                                          (carOp->envLevel * 0x10) +                                  // Envelope
-                                         //TODO: KSL
+                                         carOp->kslAtten +
                                          (percChan[ch].carOp->totalLevel * 0x20));                   // Channel volume
                 }
             }
