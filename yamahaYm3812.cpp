@@ -101,7 +101,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 op.keyScaleRate = static_cast<bool>(val & 0x10);
                 {
                     int ksrNote = ((chan[chNum].fNum >> 9) + (chan[chNum].octave << 1));
-                    op.ksrIndex = chan[chNum].carOp.keyScaleRate ? ksrNote : ksrNote>>2;
+                    op.ksrIndex = op.keyScaleRate ? ksrNote : ksrNote>>2;
                 }
                 op.freqMult = (val & 0x0f);
                 op.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[op.freqMult]) << chan[chNum].octave));
@@ -143,7 +143,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 if(percChan[i].modOp) {
                     percChan[i].modOp->envPhase = release;
                 }
-                printf("APU::YM3812 perc   chan %d (%s) key-off\n", i, rhythmNames[i].c_str());
+                printf("APU::YM3812 perc chan %d (%s) key-off\n", i, rhythmNames[i].c_str());
                 percChan[i].carOp->envPhase = release;
             }
             else if(!percChan[i].keyOn && newKeyOn) { //keyon event
