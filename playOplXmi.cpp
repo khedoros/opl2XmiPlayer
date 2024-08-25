@@ -263,6 +263,7 @@ int main(int argc, char* argv[]) {
         bool success = uwpf.load(argv[1]);
         if(!success) {
             std::cerr<<"Couldn't load the patch file. Aborting.\n";
+            return 1;
         }
 
         // Prep initial patch data
@@ -279,6 +280,7 @@ int main(int argc, char* argv[]) {
         success = xmifile.load(argv[2]);
         if(!success) {
             std::cout<<"Couldn't load the xmi file. Aborting.\n";
+            return 1;
         }
     }
     else {
