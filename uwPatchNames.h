@@ -43,7 +43,7 @@ std::array<std::string,76> rhythmInstruments {
     "", "High Bongo", "Low Bongo", "Mt High Conga", "High Conga", "Low Conga", "High Timbale", "Low Timbale",
     "High Agogo", "Low Agogo", "Cabasa", "Maracas", "Smba Whis S", "Smba Whis L", "Quijada", "", "Claves"
 };
-std::array<std::string,27> tvfxInstruments {
+std::array<std::string,28> tvfxInstruments {
     "Step",
     "Step2",
     "Boom (Low)",
@@ -69,6 +69,7 @@ std::array<std::string,27> tvfxInstruments {
     "Rumble",
     "Thwang",
     "Spell",
+    "",
     "SpellNotYt",
     "SpellFail"
 };
