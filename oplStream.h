@@ -10,7 +10,11 @@
 class oplStream : public OPLEmul {
     private:
         OPLEmul *opl;
+#ifdef JAVA_OPL
+        static const int stereoChannels = 2;
+#else
         static const int stereoChannels = 1;
+#endif
         static const int sampleRate = OPL_SAMPLE_RATE;
         static const int processPerSecond = 120;
         static const int sampleChunkSize = (sampleRate * stereoChannels) / processPerSecond;
@@ -21,8 +25,11 @@ class oplStream : public OPLEmul {
         bool stopped;
         bool handleEvents;
     public:
+#ifdef JAVA_OPL
+        oplStream(bool doEvents = true) : opl(JavaOPLCreate(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false}, handleEvents{doEvents} {
+#else
         oplStream(bool doEvents = true) : opl(YamahaYm3812Create(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false}, handleEvents{doEvents} {
-//        oplStream() : opl(JavaOPLCreate(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false} {
+#endif
             std::cout<<"Init the stream to "<<stereoChannels<<" channels, "<<sampleRate<<"Hz sample rate\n";
             initSDLAudio();
             pause();
