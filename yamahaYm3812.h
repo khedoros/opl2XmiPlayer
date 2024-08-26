@@ -20,6 +20,10 @@ public:
 
 private:
     class inst_t;
+
+    void updatePhases();
+    void updateEnvelopes();
+
     uint8_t curReg;
     uint8_t statusVal;
     float leftPan;
@@ -31,6 +35,12 @@ private:
     int vibratoMultiplier; // 7 cent when false, 14 cent when true
 
     unsigned int envCounter; // Global counter for advancing envelope state
+
+    int amPhase; // index into the amTable, for how deep to currently apply the AM value
+    static const int amPhaseSampleLength = (OPL_SAMPLE_RATE * 64) / NATIVE_OPL_SAMPLE_RATE; // Number of samples between progressing to a new index
+
+    int fmPhase; // vibrato has 8 phases
+    static const int fmPhaseSampleLength = (OPL_SAMPLE_RATE * 1024) / NATIVE_OPL_SAMPLE_RATE;
 
     enum adsrPhase {
         silent,         //Note hit envelope==48dB
@@ -60,24 +70,27 @@ private:
     int convertWavelength(int wavelength);
 
     struct op_t {
-        void updateEnvelope(unsigned int envCounter, unsigned int tremoloMultipler, unsigned int vibratoMultiplier);
+        void updateEnvelope(unsigned int envCounter);
         int lfsrStepGalois();
         unsigned phaseInc:20;    // Basically the frequency, generated from the instrument's mult, and the fNum and octave/block for the channel
         unsigned phaseCnt:20;    // Current place in the sine phase. 10.10 fixed-point number, where the whole selects the sine sample to use
 
-        int amPhase; // index into the amTable, for how deep to currently apply the AM value
-        static const int amPhaseSampleLength = (OPL_SAMPLE_RATE * 64) / NATIVE_SAMPLE_RATE; // Number of samples between progressing to a new index
         int amAtten; // current AM (tremolo) attenuation level
-
-        // FM/vibrato state tracking.
-        int fmRow; // fmRow is decided by the top 3 bits of the current fNum for the channel
-        int fmPhase; // vibrato has 8 phases
         int fmShift; // current FM (vibrato) phase shift level
-        static const int fmPhaseSampleLength = (OPL_SAMPLE_RATE * 1024) / NATIVE_SAMPLE_RATE;
 
         // Modulator feedback state.
+        unsigned feedbackLevel: 3; // feedback level of first slot
         int modFB1;
         int modFB2;
+
+
+        enum connectionType {
+            fm,
+            additive
+        };
+        // Connection type between modulator and carrier
+        connectionType conn; // How second slot treats first slot's output
+
 
         bool releaseSustain;   //1=key-off has release-rate at 5, 0=key-off has release rate at 7 (both with KSR adjustment)
 
@@ -112,20 +125,16 @@ private:
         uint32_t galoisState; // LFSR state for the rhythem channels
     };
 
-    enum connectionType {
-        fm,
-        additive
-    };
-
     struct chan_t {
         unsigned fNum: 10; // 2nd of 3 elements that define the frequency
         bool keyOn; //on-off state of the key
         unsigned int octave: 3; //3rd element that defines the frequency
-        unsigned feedbackLevel: 3; // feedback level of first slot
-        connectionType conn;
 
         unsigned kslIndex: 7; // Index to the KSL table (scales volume level by note)
         unsigned ksrIndex: 4; // Index to the KSR table (scales envelope by note)
+
+        // FM/vibrato state tracking.
+        int fmRow; // fmRow is decided by the top 3 bits of the current fNum for the channel
 
         op_t modOp;
         op_t carOp;

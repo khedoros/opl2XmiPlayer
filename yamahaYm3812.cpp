@@ -19,31 +19,28 @@ void YamahaYm3812::Reset() {
             WriteReg(addr, 0);
         }
     }
-    for(int ch = 0; ch < 9; ch++) {
-        chan[ch].modOp.phaseInc = 0;
-        chan[ch].modOp.phaseCnt = 0;
-        chan[ch].modOp.envPhase = adsrPhase::silent;
-        chan[ch].modOp.envLevel = 127;
-        chan[ch].modOp.amPhase = 0;
-        chan[ch].modOp.amAtten = 0;
-        chan[ch].modOp.fmPhase = 0;
-        chan[ch].modOp.fmRow = 0;
-        chan[ch].modOp.fmShift = 0;
-        chan[ch].modOp.modFB1 = 0;
-        chan[ch].modOp.modFB2 = 0;
+    amPhase = 0;
+    fmPhase = 0;
+    for(auto& ch: chan) {
+        ch.modOp.phaseInc = 0;
+        ch.modOp.phaseCnt = 0;
+        ch.modOp.envPhase = adsrPhase::silent;
+        ch.modOp.envLevel = 127;
+        ch.modOp.amAtten = 0;
+        ch.modOp.fmShift = 0;
+        ch.modOp.modFB1 = 0;
+        ch.modOp.modFB2 = 0;
 
 
-        chan[ch].carOp.phaseInc = 0;
-        chan[ch].carOp.phaseCnt = 0;
-        chan[ch].carOp.envPhase = adsrPhase::silent;
-        chan[ch].carOp.envLevel = 127;
-        chan[ch].carOp.amPhase = 0;
-        chan[ch].carOp.amAtten = 0;
-        chan[ch].carOp.fmPhase = 0;
-        chan[ch].carOp.fmRow = 0;
-        chan[ch].carOp.fmShift = 0;
+        ch.carOp.phaseInc = 0;
+        ch.carOp.phaseCnt = 0;
+        ch.carOp.envPhase = adsrPhase::silent;
+        ch.carOp.envLevel = 127;
+        ch.carOp.amAtten = 0;
+        ch.carOp.fmShift = 0;
 
-        chan[ch].kslIndex = 0;
+        ch.kslIndex = 0;
+        ch.fmRow = 0;
     }
 }
 
@@ -85,17 +82,12 @@ void YamahaYm3812::WriteReg(int reg, int val) {
         
         switch(reg & 0xe0) {
             case 0x20:
-                if(op.amActive != static_cast<bool>(val & 0x80)) { // If turning off, going to phase 0 effectively disables it.
-                                                                   // If turning on, we want to start from the beginning of the phase.
-                    op.amPhase = 0;
-                    op.amAtten = 0;
-                }
                 op.amActive = static_cast<bool>(val & 0x80);
-
-                if(op.vibActive != static_cast<bool>(val & 0x40)) { // Similar reasons to the AM one above
-                    op.fmPhase = 0;
-                }
+                if(!op.amActive) op.amAtten = 0;
+                else op.amAtten = amTable[amPhase] * tremoloMultiplier;
                 op.vibActive = static_cast<bool>(val & 0x40);
+                if(!op.vibActive) op.fmShift = 0;
+                else op.fmShift = fmTable[chan[chNum].fmRow + fmPhase] * vibratoMultiplier;
 
                 op.sustain = static_cast<bool>(val & 0x20);
                 op.keyScaleRate = static_cast<bool>(val & 0x10);
@@ -179,8 +171,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 chan[chNum].kslIndex = ((chan[chNum].fNum >>6 ) + (chan[chNum].octave << 4));
                 chan[chNum].modOp.kslAtten = ((1 << chan[chNum].modOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
                 chan[chNum].carOp.kslAtten = ((1 << chan[chNum].carOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
-                chan[chNum].carOp.fmRow = (chan[chNum].fNum >> 4) & 0b111000;
-                chan[chNum].modOp.fmRow = (chan[chNum].fNum >> 4) & 0b111000;
+                chan[chNum].fmRow = (chan[chNum].fNum >> 4) & 0b111000;
                 break;
             case 0xb0:
                 chan[chNum].fNum &= 0xff;
@@ -196,8 +187,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 }
                 chan[chNum].modOp.kslAtten = ((1 << chan[chNum].modOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
                 chan[chNum].carOp.kslAtten = ((1 << chan[chNum].carOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
-                chan[chNum].carOp.fmRow = (chan[chNum].fNum >> 4) & 0b111000;
-                chan[chNum].modOp.fmRow = (chan[chNum].fNum >> 4) & 0b111000;
+                chan[chNum].fmRow = (chan[chNum].fNum >> 4) & 0b111000;
                 {
                     bool newKeyOn = static_cast<bool>(val & 0x20);
                     if(chan[chNum].keyOn && !newKeyOn) { // keyOff event
@@ -228,8 +218,8 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 }
                 break;
             case 0xc0:
-                chan[chNum].conn = static_cast<connectionType>(val & 0x01);
-                chan[chNum].feedbackLevel = ((val >> 1) & 0x07);
+                chan[chNum].carOp.conn = static_cast<op_t::connectionType>(val & 0x01);
+                chan[chNum].modOp.feedbackLevel = ((val >> 1) & 0x07);
                 break;
         }
     }
@@ -239,13 +229,11 @@ void YamahaYm3812::SetPanning(int channel, float left, float right) {}
 void YamahaYm3812::Update(float* buffer, int sampleCnt) {}
 
 void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
+    std::lock_guard<std::mutex> guard(regMutex);
     for(int i=0;i<sampleCnt*audioChannels;i+=audioChannels) {
-        std::lock_guard<std::mutex> guard(regMutex);
         envCounter++;
-        for(int ch = 0; ch < 9; ch++) {
-            chan[ch].modOp.updateEnvelope(envCounter, tremoloMultiplier, vibratoMultiplier);
-            chan[ch].carOp.updateEnvelope(envCounter, tremoloMultiplier, vibratoMultiplier);
-        }
+        updatePhases();
+        updateEnvelopes();
 
         int16_t sample = 0;
 
@@ -257,7 +245,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
             if(carOp.envPhase != adsrPhase::silent) {
 
                 modOp.phaseCnt += modOp.phaseInc;
-                int feedback = (chan[ch].feedbackLevel) ? ((modOp.modFB1 + modOp.modFB2) >> (8 - chan[ch].feedbackLevel)) : 0;
+                int feedback = (modOp.feedbackLevel) ? ((modOp.modFB1 + modOp.modFB2) >> (8 - modOp.feedbackLevel)) : 0;
                 carOp.phaseCnt += carOp.phaseInc;
 
                 int modSin = lookupSin((modOp.phaseCnt / 1024) - 1 +                              // phase
@@ -273,7 +261,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                 modOp.modFB1 = modOp.modFB2;
                 modOp.modFB2 = modOut;
 
-                if(chan[ch].conn == connectionType::fm) {
+                if(carOp.conn == op_t::connectionType::fm) {
                     int carSin = lookupSin((carOp.phaseCnt  / 1024) +                                 // phase
                                         carOp.fmShift +                                        // modification for vibrato
                                         (modOut),                                             // fm modulation
@@ -308,7 +296,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                     int modOut = 0;
                     carOp->phaseCnt += carOp->phaseInc;
                     if(modOp) {
-                        int feedback = (percChan[ch].chan->feedbackLevel) ? ((modOp->modFB1 + modOp->modFB2) >> (8 - percChan[ch].chan->feedbackLevel)) : 0;
+                        int feedback = (modOp->feedbackLevel) ? ((modOp->modFB1 + modOp->modFB2) >> (8 - modOp->feedbackLevel)) : 0;
                         modOp->phaseCnt += modOp->phaseInc;
                         int modSin = lookupSin((modOp->phaseCnt / 1024) - 1 +                         // phase
                                                modOp->fmShift +                                      // modification for vibrato
@@ -399,23 +387,37 @@ int YamahaYm3812::convertWavelength(int wavelength) {
     return (static_cast<int64_t>(wavelength) * NATIVE_SAMPLE_RATE) / OPL_SAMPLE_RATE;
 }
 
-void YamahaYm3812::op_t::updateEnvelope(unsigned int counter, unsigned int tremoloMultiplier, unsigned int vibratoMultiplier) {
-    if(amActive && counter % amPhaseSampleLength == 0) {
+void YamahaYm3812::updatePhases() {
+    if(envCounter % amPhaseSampleLength == 0) {
         amPhase++;
-        if(amPhase == amTable.size()) {
-            amPhase = 0;
+        amPhase %= amTable.size();
+        int amAtten = amTable[amPhase] * tremoloMultiplier;
+        for(int ch = 0; ch < 9; ch++) {
+            if(chan[ch].modOp.amActive) chan[ch].modOp.amAtten = amAtten;
+            if(chan[ch].carOp.amActive) chan[ch].carOp.amAtten = amAtten;
         }
-        amAtten = amTable[amPhase] * tremoloMultiplier;
     }
 
-    if(vibActive && counter % fmPhaseSampleLength == 0) {
+    if(envCounter % fmPhaseSampleLength == 0) {
         fmPhase++;
-        if(fmPhase == 8) {
-            fmPhase = 0;
+        fmPhase &= 7;
+        for(auto& ch: chan) {
+            if(ch.modOp.vibActive) ch.modOp.fmShift = fmTable[ch.fmRow + fmPhase] * vibratoMultiplier;
+            if(ch.carOp.vibActive) ch.carOp.fmShift = fmTable[ch.fmRow + fmPhase] * vibratoMultiplier;
         }
-        fmShift = fmTable[fmRow + fmPhase] * vibratoMultiplier;
     }
-    
+
+}
+
+void YamahaYm3812::updateEnvelopes() {
+    for(auto& ch: chan) {
+        if(ch.modOp.envPhase != adsrPhase::silent) ch.modOp.updateEnvelope(envCounter);
+        if(ch.carOp.envPhase != adsrPhase::silent) ch.carOp.updateEnvelope(envCounter);
+    }
+}
+
+void YamahaYm3812::op_t::updateEnvelope(unsigned int counter) {
+
     if(envPhase == adsrPhase::dampen && envLevel >= 123) { // Dampened previous note, start attack of new note
         envPhase = adsrPhase::attack;
     }
