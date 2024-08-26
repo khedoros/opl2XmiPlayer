@@ -396,7 +396,7 @@ int YamahaYm3812::lookupExp(int val) {
 }
 
 int YamahaYm3812::convertWavelength(int wavelength) {
-    return (wavelength * OPL_SAMPLE_RATE) / NATIVE_SAMPLE_RATE;
+    return (wavelength * NATIVE_SAMPLE_RATE) / OPL_SAMPLE_RATE;
 }
 
 void YamahaYm3812::op_t::updateEnvelope(unsigned int counter, unsigned int tremoloMultiplier, unsigned int vibratoMultiplier) {
