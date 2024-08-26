@@ -286,7 +286,7 @@ int main(int argc, char* argv[]) {
             switch(event.type) {
             case SDL_KEYDOWN:
                 if(!event.key.repeat) {
-                    std::cout<<"KEYDOWN: "<<event.key.keysym.sym<<'\n';
+                    // std::cout<<"KEYDOWN: "<<event.key.keysym.sym<<'\n';
                     note = keyMap[SDL_GetKeyFromScancode(event.key.keysym.scancode)];
                     if(note > 0 && note < 100) {
                         note_on(*opl, note, 127);
@@ -309,7 +309,7 @@ int main(int argc, char* argv[]) {
                 }
                 break;
             case SDL_KEYUP:
-                std::cout<<"KEYUP: "<<event.key.keysym.sym<<'\n';
+                // std::cout<<"KEYUP: "<<event.key.keysym.sym<<'\n';
                 note = keyMap[SDL_GetKeyFromScancode(event.key.keysym.scancode)];
                 if(note > 0 && note < 100) {
                     note_off(*opl, note);
