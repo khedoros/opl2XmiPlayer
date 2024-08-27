@@ -35,23 +35,27 @@ std::array<int8_t, MIDI_NOTE_COUNT> note_voice;
 
 //Data and methods having to do with current use of OPL channels, voice assignments, etc
 #ifdef JAVA_OPL
-const int OPL_VOICE_COUNT = 18;
 
-//Which note index each of the 9 voices in an OPL2 chip is set to play. -1 means "none".
-std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+    const int OPL_VOICE_COUNT = 18;
 
-const std::array<uint16_t, OPL_VOICE_COUNT> voice_base_mod {  0,  1,  2,  8,  9,0xa,0x10,0x11,0x12, 0x100, 0x101, 0x102,0x108,0x109,0x10a,0x110, 0x111, 0x112};
-const std::array<uint16_t, OPL_VOICE_COUNT> voice_base_car {  3,  4,  5,0xb,0xc,0xd,0x13,0x14,0x15, 0x103,  0x104,  0x105,0x10b,0x10c,0x10d,0x113,0x114,0x115};
-const std::array<uint16_t, OPL_VOICE_COUNT> voice_base2    {  0,  1,  2,  3,  4,  5,   6,   7,   8, 0x100,0x101,0x102,0x103,0x104,0x105,0x106,0x107,0x108};
+    //Which note index each of the 18 voices in a dual-OPL2 chip is set to play. -1 means "none".
+    std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+
+    const std::array<uint16_t, OPL_VOICE_COUNT> voice_base_mod {  0,  1,  2,  8,  9,0xa,0x10,0x11,0x12, 0x100, 0x101, 0x102,0x108,0x109,0x10a,0x110, 0x111, 0x112};
+    const std::array<uint16_t, OPL_VOICE_COUNT> voice_base_car {  3,  4,  5,0xb,0xc,0xd,0x13,0x14,0x15, 0x103,  0x104,  0x105,0x10b,0x10c,0x10d,0x113,0x114,0x115};
+    const std::array<uint16_t, OPL_VOICE_COUNT> voice_base2    {  0,  1,  2,  3,  4,  5,   6,   7,   8, 0x100,0x101,0x102,0x103,0x104,0x105,0x106,0x107,0x108};
+
 #else
-const int OPL_VOICE_COUNT = 9;
+
+    const int OPL_VOICE_COUNT = 9;
  
- //Which note index each of the 9 voices in an OPL2 chip is set to play. -1 means "none".
-std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+    //Which note index each of the 9 voices in an OPL2 chip is set to play. -1 means "none".
+    std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1};
  
-const std::array<uint8_t, OPL_VOICE_COUNT> voice_base_mod {  0,  1,  2,  8,  9,0xa,0x10,0x11,0x12};
-const std::array<uint8_t, OPL_VOICE_COUNT> voice_base_car {  3,  4,  5,0xb,0xc,0xd,0x13,0x14,0x15};
-const std::array<uint8_t, OPL_VOICE_COUNT> voice_base2    {  0,  1,  2,  3,  4,  5,   6,   7,   8};
+    const std::array<uint8_t, OPL_VOICE_COUNT> voice_base_mod {  0,  1,  2,  8,  9,0xa,0x10,0x11,0x12};
+    const std::array<uint8_t, OPL_VOICE_COUNT> voice_base_car {  3,  4,  5,0xb,0xc,0xd,0x13,0x14,0x15};
+    const std::array<uint8_t, OPL_VOICE_COUNT> voice_base2    {  0,  1,  2,  3,  4,  5,   6,   7,   8};
+
 #endif
 
 //Which patch and bank is each MIDI channel currently set to play
@@ -84,6 +88,9 @@ enum OPL_addresses {
     WS   = 0xe0
 };
 
+// Instrument translation tables from General MIDI instruments to the 
+// numbers used in MT-32-inspired timbre banks. It'll be more useful
+// when I write a parser for standard MIDI.
 std::unordered_map<int,int> midiTranslate {
     { 0, 0 },    { 1, 1 },    { 2, 3 },    { 3, 7 },
     { 4, 5 },    { 5, 6 },    { 6, 17 },    { 7, 21 },
