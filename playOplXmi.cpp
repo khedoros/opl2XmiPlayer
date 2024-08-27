@@ -4,17 +4,19 @@
 
 #include<iostream>
 #include<memory>
-#include "uwPatch.h"
-#include "opl.h"
-#include "yamahaYm3812.h"
-#include "xmi.h"
-#include "midiEvent.h"
+#include<unordered_map>
 #include<vector>
 #include<list>
 #include<tuple>
 #include<cmath>
 #include<thread>
+
 #include "oplStream.h"
+#include "uwPatch.h"
+#include "opl.h"
+#include "yamahaYm3812.h"
+#include "xmi.h"
+#include "midiEvent.h"
 
 //Store midi note number mappings to OPL block number and OPL F-num values
 vector<tuple<uint8_t,    uint8_t,     uint16_t>> freqs;
@@ -32,14 +34,25 @@ std::array<int8_t, MIDI_NOTE_COUNT> note_velocity;
 std::array<int8_t, MIDI_NOTE_COUNT> note_voice;
 
 //Data and methods having to do with current use of OPL channels, voice assignments, etc
-const int OPL_VOICE_COUNT = 9;
+#ifdef JAVA_OPL
+const int OPL_VOICE_COUNT = 18;
 
 //Which note index each of the 9 voices in an OPL2 chip is set to play. -1 means "none".
-std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
 
+const std::array<uint16_t, OPL_VOICE_COUNT> voice_base_mod {  0,  1,  2,  8,  9,0xa,0x10,0x11,0x12, 0x100, 0x101, 0x102,0x108,0x109,0x10a,0x110, 0x111, 0x112};
+const std::array<uint16_t, OPL_VOICE_COUNT> voice_base_car {  3,  4,  5,0xb,0xc,0xd,0x13,0x14,0x15, 0x103,  0x104,  0x105,0x10b,0x10c,0x10d,0x113,0x114,0x115};
+const std::array<uint16_t, OPL_VOICE_COUNT> voice_base2    {  0,  1,  2,  3,  4,  5,   6,   7,   8, 0x100,0x101,0x102,0x103,0x104,0x105,0x106,0x107,0x108};
+#else
+const int OPL_VOICE_COUNT = 9;
+ 
+ //Which note index each of the 9 voices in an OPL2 chip is set to play. -1 means "none".
+std::array<int8_t, OPL_VOICE_COUNT> opl_note_assignment    {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+ 
 const std::array<uint8_t, OPL_VOICE_COUNT> voice_base_mod {  0,  1,  2,  8,  9,0xa,0x10,0x11,0x12};
 const std::array<uint8_t, OPL_VOICE_COUNT> voice_base_car {  3,  4,  5,0xb,0xc,0xd,0x13,0x14,0x15};
 const std::array<uint8_t, OPL_VOICE_COUNT> voice_base2    {  0,  1,  2,  3,  4,  5,   6,   7,   8};
+#endif
 
 //Which patch and bank is each MIDI channel currently set to play
 //Initialize them to 0:0
@@ -69,6 +82,41 @@ enum OPL_addresses {
     TREM_VIB   = 0xbd, //Set to 0xc0
     FB_C   = 0xc0,
     WS   = 0xe0
+};
+
+std::unordered_map<int,int> midiTranslate {
+    { 0, 0 },    { 1, 1 },    { 2, 3 },    { 3, 7 },
+    { 4, 5 },    { 5, 6 },    { 6, 17 },    { 7, 21 },
+    { 8, 22 },    { 9, 101 },    { 10, 101 },    { 11, 98 },
+    { 12, 104 },    { 13, 103 },    { 14, 102 },    { 15, 105 },
+    { 16, 12 },    { 17, 9 },    { 18, 10 },    { 19, 13 },
+    { 20, 14 },    { 21, 15 },    { 22, 87 },    { 23, 15 },
+    { 24, 59 },    { 25, 60 },    { 26, 59 },    { 27, 62 },
+    { 28, 61 },    { 29, 59 },    { 30, 62 },    { 31, 62 },
+    { 32, 64 },    { 33, 67 },    { 34, 66 },    { 35, 71 },
+    { 36, 68 },    { 37, 69 },    { 38, 66 },    { 39, 70 },
+    { 40, 53 },    { 41, 52 },    { 42, 54 },    { 43, 56 },
+    { 44, 53 },    { 45, 51 },    { 46, 57 },    { 47, 112 },
+    { 48, 48 },    { 49, 50 },    { 50, 48 },    { 51, 50 },
+    { 52, 34 },    { 53, 42 },    { 54, 33 },    { 55, 122 },
+    { 56, 88 },    { 57, 90 },    { 58, 94 },    { 59, 89 },
+    { 60, 92 },    { 61, 95 },    { 62, 89 },    { 63, 91 },
+    { 64, 78 },    { 65, 79 },    { 66, 80 },    { 67, 81 },
+    { 68, 84 },    { 69, 85 },    { 70, 86 },    { 71, 83 },
+    { 72, 75 },    { 73, 73 },    { 74, 76 },    { 75, 77 },
+    { 76, 110 },    { 77, 107 },    { 78, 108 },    { 79, 72 },
+    { 80, 47 },    { 81, 67 },    { 82, 75 },    { 83, 51 },
+    { 84, 61 },    { 85, 72 },    { 86, 52 },    { 87, 67 },
+    { 88, 32 },    { 89, 33 },    { 90, 67 },    { 91, 34 },
+    { 92, 32 },    { 93, 32 },    { 94, 33 },    { 95, 33 },
+    { 96, 41 },    { 97, 36 },    { 98, 35 },    { 99, 37 },
+    { 100, 45 },    { 101, 33 },    { 102, 43 },    { 103, 32 },
+    { 104, 63 },    { 105, 105 },    { 106, 105 },    { 107, 105 },
+    { 108, 51 },    { 109, 81 },    { 110, 52 },    { 111, 81 },
+    { 112, 23 },    { 113, 103 },    { 114, 103 },    { 115, 113 },
+    { 116, 117 },    { 117, 113 },    { 118, 116 },    { 119, 119 },
+    { 120, 124 },    { 121, 120 },    { 122, 119 },    { 123, 124 },
+    { 124, 123 },    { 125, 120 },    { 126, 119 },    { 127, 114 }
 };
 
 //Find the note entry for the given channel and note#
@@ -162,6 +210,9 @@ void init_opl2() {
 
     for(size_t reg = 0; reg < 0xf6; ++reg) {
         opl->WriteReg(reg,init_array1[reg]);
+        #ifdef JAVA_OPL
+        opl->WriteReg(reg+0x100,init_array1[reg]);
+        #endif
     }
 }
 
@@ -390,10 +441,12 @@ int main(int argc, char* argv[]) {
             writeVolume(note_index);
             break;
         case midi_event::PROGRAM_CHANGE: //0xc0
+//            if(channel_patch_num[channel] == midiTranslate[midi_data[1]]) {
             if(channel_patch_num[channel] == midi_data[1]) {
                 std::cout<<"No change in patch number\n";
             }
             else {
+//                channel_patch_num[channel] = midiTranslate[midi_data[1]];
                 channel_patch_num[channel] = midi_data[1];
                 for(auto& patch: uwpf.bank_data) {
                     if(patch.patch == channel_patch_num[channel] && patch.bank == channel_bank_num[channel]) {
