@@ -44,13 +44,13 @@ private:
 
     enum adsrPhase {
         silent,         //Note hit envelope==48dB
-        dampen,         //End of previous note, behaves like a base decay rate of 12, adjusted by rate_key_scale
         attack,         //New note rising after key-on
         decay,          //Initial fade to sustain level after reaching max volume
         sustain,        //Level to hold at until key-off, or level at which to transition from decay to sustainRelease phase
-        sustainRelease, //sustain for percussive notes
         release         //key-off
     };
+
+    static const std::array<std::string,5> adsrPhaseNames;
 
     static const std::array<uint8_t, 16> multVal;
     static const std::array<std::string,5> rhythmNames;
@@ -59,10 +59,12 @@ private:
     static const std::array<int,210> amTable;
     static const std::array<int,64> fmTable;
     static const std::array<int,128> kslTable;
-    static const std::array<int,64> attackTable;
-    static const std::array<int,64> decayTable;
+    static const std::array<float,4> attackTableBase;
+    static std::array<int,64> attackTable;
+    static const std::array<float,4> decayTableBase;
+    static std::array<int,64> decayTable;
     static const int NATIVE_SAMPLE_RATE = 49716;
-    static const int envAccumRate = 1'000'000 / OPL_SAMPLE_RATE;
+    static const int envAccumRate = 1'000'000 / OPL_SAMPLE_RATE; // Microseconds per sample
 
     void initTables();
     int lookupSin(int val, int waveForm);
@@ -95,7 +97,7 @@ private:
         bool releaseSustain;   //1=key-off has release-rate at 5, 0=key-off has release rate at 7 (both with KSR adjustment)
 
         adsrPhase envPhase;
-        int envLevel; // 0 - 127. 0.375dB steps (add envLevel * 0x10)
+        int envLevel; // 0 - 255. 0.375dB steps (add envLevel * 0x10)
         int envAccum; // microsecond count for envLevel increment/decrement
 
         //reg base 20

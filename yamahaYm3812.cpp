@@ -25,7 +25,7 @@ void YamahaYm3812::Reset() {
         ch.modOp.phaseInc = 0;
         ch.modOp.phaseCnt = 0;
         ch.modOp.envPhase = adsrPhase::silent;
-        ch.modOp.envLevel = 127;
+        ch.modOp.envLevel = 255;
         ch.modOp.amAtten = 0;
         ch.modOp.fmShift = 0;
         ch.modOp.modFB1 = 0;
@@ -35,7 +35,7 @@ void YamahaYm3812::Reset() {
         ch.carOp.phaseInc = 0;
         ch.carOp.phaseCnt = 0;
         ch.carOp.envPhase = adsrPhase::silent;
-        ch.carOp.envLevel = 127;
+        ch.carOp.envLevel = 255;
         ch.carOp.amAtten = 0;
         ch.carOp.fmShift = 0;
 
@@ -135,26 +135,19 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 if(percChan[i].modOp) {
                     percChan[i].modOp->envPhase = release;
                 }
-                printf("APU::YM3812 perc chan %d (%s) key-off\n", i, rhythmNames[i].c_str());
                 percChan[i].carOp->envPhase = release;
+                printf("APU::YM3812 perc chan %d (%s) key-off\n", i, rhythmNames[i].c_str());
             }
-            else if(!percChan[i].keyOn && newKeyOn) { //keyon event
+            else if(newKeyOn) { //keyon event
+                if(!percChan[i].keyOn) {
+                    if(percChan[i].modOp) percChan[i].modOp->phaseCnt = 0;
+                    percChan[i].carOp->phaseCnt = 0;
+                }
                 if(percChan[i].modOp) {
-                    if(percChan[i].modOp->envPhase == silent) {
-                        percChan[i].modOp->envPhase = attack;
-                    }
-                    else {
-                        percChan[i].modOp->envPhase = dampen;
-                    }
+                    percChan[i].modOp->envPhase = attack;
                 }
-                if(percChan[i].carOp->envPhase != silent) {
-                    percChan[i].carOp->envPhase = dampen;
-                    printf("APU::YM3812 perc   chan %d (%s) dampen key-on\n", i, rhythmNames[i].c_str());
-                }
-                else {
-                    percChan[i].carOp->envPhase = attack;
-                    printf("APU::YM3812 perc   chan %d (%s) attack key-on\n", i, rhythmNames[i].c_str());
-                }
+                percChan[i].carOp->envPhase = attack;
+                printf("APU::YM3812 perc   chan %d (%s) attack key-on\n", i, rhythmNames[i].c_str());
             }
             percChan[i].keyOn = newKeyOn;
         }
@@ -162,64 +155,84 @@ void YamahaYm3812::WriteReg(int reg, int val) {
     else if(reg >= 0xa0 && reg < 0xe0) { // Register writes that affect the channels
         uint8_t chNum = reg & 0x0f;
         if(chNum > 8) return; // invalid channel
+        YamahaYm3812::chan_t& channel = chan[chNum];
+        YamahaYm3812::op_t& modOp = channel.modOp;
+        YamahaYm3812::op_t& carOp = channel.carOp;
         switch(reg & 0xf0) {
             case 0xa0:
-                chan[chNum].fNum &= 0x300;
-                chan[chNum].fNum |= val;
-                chan[chNum].modOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].modOp.freqMult]) << chan[chNum].octave));
-                chan[chNum].carOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].carOp.freqMult]) << chan[chNum].octave));
-                chan[chNum].kslIndex = ((chan[chNum].fNum >>6 ) + (chan[chNum].octave << 4));
-                chan[chNum].modOp.kslAtten = ((1 << chan[chNum].modOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
-                chan[chNum].carOp.kslAtten = ((1 << chan[chNum].carOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
-                chan[chNum].fmRow = (chan[chNum].fNum >> 4) & 0b111000;
+                channel.fNum &= 0x300;
+                channel.fNum |= val;
+                modOp.phaseInc = convertWavelength(((channel.fNum * multVal[modOp.freqMult]) << channel.octave));
+                carOp.phaseInc = convertWavelength(((channel.fNum * multVal[carOp.freqMult]) << channel.octave));
+                channel.kslIndex = ((channel.fNum >>6 ) + (channel.octave << 4));
+                modOp.kslAtten = ((1 << modOp.keyScaleLevel) >> 1) * 8 * kslTable[channel.kslIndex];
+                carOp.kslAtten = ((1 << carOp.keyScaleLevel) >> 1) * 8 * kslTable[channel.kslIndex];
+                channel.fmRow = (channel.fNum >> 4) & 0b111000;
                 break;
             case 0xb0:
-                chan[chNum].fNum &= 0xff;
-                chan[chNum].fNum |= ((val&0x03)<<8);
-                chan[chNum].octave = ((val>>2) & 0x07);
-                chan[chNum].modOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].modOp.freqMult]) << chan[chNum].octave));
-                chan[chNum].carOp.phaseInc = convertWavelength(((chan[chNum].fNum * multVal[chan[chNum].carOp.freqMult]) << chan[chNum].octave));
-                chan[chNum].kslIndex = ((chan[chNum].fNum >>6 ) + (chan[chNum].octave << 4));
+                channel.fNum &= 0xff;
+                channel.fNum |= ((val&0x03)<<8);
+                channel.octave = ((val>>2) & 0x07);
+                modOp.phaseInc = convertWavelength(((channel.fNum * multVal[modOp.freqMult]) << channel.octave));
+                carOp.phaseInc = convertWavelength(((channel.fNum * multVal[carOp.freqMult]) << channel.octave));
+                channel.kslIndex = ((channel.fNum >>6 ) + (channel.octave << 4));
                 {
-                    int ksrNote = ((chan[chNum].fNum >> 9) + (chan[chNum].octave << 1));
-                    chan[chNum].carOp.ksrIndex = chan[chNum].carOp.keyScaleRate ? ksrNote : ksrNote>>2;
-                    chan[chNum].modOp.ksrIndex = chan[chNum].modOp.keyScaleRate ? ksrNote : ksrNote>>2;
+                    int ksrNote = ((channel.fNum >> 9) + (channel.octave << 1));
+                    carOp.ksrIndex = carOp.keyScaleRate ? ksrNote : ksrNote>>2;
+                    modOp.ksrIndex = modOp.keyScaleRate ? ksrNote : ksrNote>>2;
                 }
-                chan[chNum].modOp.kslAtten = ((1 << chan[chNum].modOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
-                chan[chNum].carOp.kslAtten = ((1 << chan[chNum].carOp.keyScaleLevel) >> 1) * 8 * kslTable[chan[chNum].kslIndex];
-                chan[chNum].fmRow = (chan[chNum].fNum >> 4) & 0b111000;
+                modOp.kslAtten = ((1 << modOp.keyScaleLevel) >> 1) * 8 * kslTable[channel.kslIndex];
+                carOp.kslAtten = ((1 << carOp.keyScaleLevel) >> 1) * 8 * kslTable[channel.kslIndex];
+                channel.fmRow = (channel.fNum >> 4) & 0b111000;
                 {
                     bool newKeyOn = static_cast<bool>(val & 0x20);
-                    if(chan[chNum].keyOn && !newKeyOn) { // keyOff event
+                    if(channel.keyOn && !newKeyOn) { // keyOff event
                         printf("APU::YM3812 melody chan %d key-off\n", chNum);
-                        chan[chNum].modOp.envPhase = adsrPhase::release;
-                        chan[chNum].carOp.envPhase = adsrPhase::release;
+                        // std::cout<<"modOp and carOp phases set to \"release\" by keyoff\n";
+                        modOp.envPhase = adsrPhase::release;
+                        modOp.envAccum = 0;
+                        carOp.envPhase = adsrPhase::release;
+                        carOp.envAccum = 0;
                     }
-                    else if(!chan[chNum].keyOn && newKeyOn) { // keyOn event
-                        // Modulator Operator
-                        if(chan[chNum].modOp.envPhase == adsrPhase::silent) {
-                            chan[chNum].modOp.envPhase = adsrPhase::attack;
+                    else if(newKeyOn) { // keyOn event
+                        if(!channel.keyOn) { // Key wasn't pressed before 
+                            modOp.phaseCnt = 0;
+                            carOp.phaseCnt = 0;
+                            printf("APU::YM3812 melody chan %d attack key-off->on\n", chNum);
                         }
                         else {
-                            chan[chNum].modOp.envPhase = adsrPhase::dampen;
+                            printf("APU::YM3812 melody chan %d attack key-on->on\n", chNum);
                         }
 
-                        // Carrier Operator
-                        if(chan[chNum].carOp.envPhase == adsrPhase::silent) {
-                            chan[chNum].carOp.envPhase = adsrPhase::attack;
-                            printf("APU::YM3812 melody chan %d attack key-on\n", chNum);
+                        modOp.envAccum = 0;
+                        carOp.envAccum = 0;
+                        if(modOp.attackRate == 15) {
+                            // std::cout<<"Max vol, set to \"decay\", because attack==15\n";
+                            modOp.envLevel = 0;
+                            modOp.envPhase = adsrPhase::decay;
+
                         }
                         else {
-                            chan[chNum].carOp.envPhase = adsrPhase::dampen;
-                            printf("APU::YM3812 melody chan %d dampen key-on\n", chNum);
+                            // std::cout<<"Set to \"attack\" due to key-on\n";
+                            modOp.envPhase = adsrPhase::attack;
+                        }
+
+                        if(carOp.attackRate == 15) {
+                            // std::cout<<"Max vol, set to \"decay\", because attack==15\n";
+                            carOp.envLevel = 0;
+                            carOp.envPhase = adsrPhase::decay;
+                        }
+                        else {
+                            // std::cout<<"Set to \"attack\" due to key-on\n";
+                            carOp.envPhase = adsrPhase::attack;
                         }
                     }
-                    chan[chNum].keyOn = newKeyOn;
+                    channel.keyOn = newKeyOn;
                 }
                 break;
             case 0xc0:
-                chan[chNum].carOp.conn = static_cast<op_t::connectionType>(val & 0x01);
-                chan[chNum].modOp.feedbackLevel = ((val >> 1) & 0x07);
+                carOp.conn = static_cast<op_t::connectionType>(val & 0x01);
+                modOp.feedbackLevel = ((val >> 1) & 0x07);
                 break;
         }
     }
@@ -374,17 +387,10 @@ int YamahaYm3812::lookupExp(int val) {
     int result = (t >> ((val & 0x7F00) >> 8)) >> 2;
     if (sign) result = ~result;
     return result;
-/*
-    bool sign = val & 0x8000;
-    int t = (expTable[(val & 255) ^ 255] | 1024) << 1;
-    int result = (t >> ((val & 0x7F00) >> 8)) >> 2;
-    if (sign) result = ~result;
-    return result;
-*/
 }
 
 int YamahaYm3812::convertWavelength(int wavelength) {
-    return (static_cast<int64_t>(wavelength) * NATIVE_SAMPLE_RATE) / OPL_SAMPLE_RATE;
+    return (static_cast<int64_t>(wavelength) * static_cast<int64_t>(NATIVE_SAMPLE_RATE)) / static_cast<int64_t>(OPL_SAMPLE_RATE);
 }
 
 void YamahaYm3812::updatePhases() {
@@ -411,38 +417,52 @@ void YamahaYm3812::updatePhases() {
 
 void YamahaYm3812::updateEnvelopes() {
     for(auto& ch: chan) {
-        if(ch.modOp.envPhase != adsrPhase::silent) ch.modOp.updateEnvelope(envCounter);
-        if(ch.carOp.envPhase != adsrPhase::silent) ch.carOp.updateEnvelope(envCounter);
+        if(ch.modOp.envPhase != adsrPhase::silent) {
+            // std::cout<<"Modulator: ";
+            ch.modOp.updateEnvelope(envCounter);
+        }
+        if(ch.carOp.envPhase != adsrPhase::silent) {
+            // std::cout<<"Carrier: ";
+            ch.carOp.updateEnvelope(envCounter);
+        }
     }
 }
 
 void YamahaYm3812::op_t::updateEnvelope(unsigned int counter) {
-
-    if(envPhase == adsrPhase::dampen && envLevel >= 123) { // Dampened previous note, start attack of new note
-        envPhase = adsrPhase::attack;
+    if(envPhase != adsrPhase::silent) {
+        // std::cout<<adsrPhaseNames[envPhase]<<": envLevel: "<<std::dec<<envLevel<<" envAccum: "<<envAccum<<'\n';
     }
-    else if(envPhase == adsrPhase::attack && (envLevel <= 0)) { 
+
+    if(envPhase == adsrPhase::attack && (envLevel <= 0)) { // Transition from attack to decay when at max volume
+        // std::cout<<"Set to \"decay\" because previous was attack and envLevel: "<<envLevel<<'\n';
         envPhase = adsrPhase::decay;
+        envAccum = 0;
         envLevel = 0;
     }
-    else if(envPhase == adsrPhase::decay && envLevel >= sustainLevel * 8) {
+    else if(envPhase == adsrPhase::decay && envLevel >= ((sustainLevel == 15)? 247 : (sustainLevel * 8))) { // Transition from decay to either sustain or release when hit sustain level
         if(sustain) {
+            // std::cout<<"Set to sustain, because previous was decay, and we're at level "<<envLevel<<" (sustain level is "<<((sustainLevel == 15)? 247 : (sustainLevel * 8))<<")\n";
             envPhase = adsrPhase::sustain;
-            envLevel = sustainLevel * 8;
+            envLevel = ((sustainLevel == 15)? 247 : (sustainLevel * 8));
+            envAccum = 0;
         }
         else {
+            // std::cout<<"Set to release, because prev was decay and we're at level "<<envLevel<<" (sustain level is "<<((sustainLevel == 15)? 247 : (sustainLevel * 8))<<")\n";
             envPhase = adsrPhase::release;
+            envAccum = 0;
         }
     }
-    else if((envPhase == adsrPhase::sustain || envPhase == adsrPhase::release) && envLevel >= 123) {
+    else if(envPhase == adsrPhase::release && envLevel >= 247) {
+        // std::cout<<"Set to silent, because prev was release, and we've hit envLevel: "<<envLevel<<'\n';
         envPhase = adsrPhase::silent;
+        envAccum = 0;
+        envLevel = 255;
     }
 
     int activeRate = 0;
     bool attack = false;
     switch(envPhase) {
         case adsrPhase::silent: activeRate = 0; break;
-        case adsrPhase::dampen: activeRate = 12; break;
         case adsrPhase::attack: activeRate = attackRate; attack = true; break;
         case adsrPhase::decay:  activeRate = decayRate; break;
         case adsrPhase::sustain: activeRate = 0; break;
@@ -452,32 +472,31 @@ void YamahaYm3812::op_t::updateEnvelope(unsigned int counter) {
             break;
     }
 
-    if(activeRate != 0) {
+    if(activeRate != 0 && (!attack || activeRate != 15)) { // Skips the rate==0 row, which is invalid, and silent+sustain states, where envLevel doesn't change
+        // std::cout<<"envAccum is "<<envAccum<<", and we add "<<envAccumRate<<" to it\n";
         envAccum += envAccumRate;
         int targetValue = 0;
-        if(attack && activeRate != 0 && activeRate != 15) {
+        int levelsToChange = 0;
+        if(attack && activeRate != 15) {
             int index = std::min(63, activeRate * 4 + ksrIndex);
             targetValue = attackTable[index];
-            if(envAccum >= targetValue) {
-                envLevel -= (envAccum / targetValue);
-                envAccum -= (envAccum / targetValue) * targetValue;
-            }
+            levelsToChange = envAccum / targetValue;
+            envAccum = envAccum % targetValue;
+            envLevel -= levelsToChange;
+            // std::cout<<"Attack, activerate: "<<activeRate<<" ksr: "<<ksrIndex<<" targetValue: "<<targetValue<<" levelsToChange: "<<levelsToChange<<" envAccum: "<<envAccum<<'\n';
         }
-        else if(attack && activeRate == 15) {
-            envLevel = 0;
-        }
-        else {
+        else if(!attack) {
             int index = std::min(63, activeRate * 4 + ksrIndex);
             targetValue = decayTable[index];
-            if(envAccum >= targetValue) {
-                envLevel += (envAccum / targetValue);
-                envAccum -= (envAccum / targetValue) * targetValue;
-            }
+            levelsToChange = envAccum / targetValue;
+            envAccum = envAccum % targetValue;
+            envLevel += levelsToChange;
+            // std::cout<<adsrPhaseNames[envPhase]<<", activerate: "<<activeRate<<" ksr: "<<ksrIndex<<" targetValue: "<<targetValue<<" levelsToChange: "<<levelsToChange<<" envAccum: "<<envAccum<<'\n';
         }
     }
 
     if(envLevel < 0) envLevel = 0; // assume wrap-around
-    else if(envLevel > 127) envLevel = 127; //assume it just overflowed the 7-bit value
+    else if(envLevel > 255) envLevel = 255; //assume it just overflowed the 8-bit value
 }
 
 int YamahaYm3812::op_t::lfsrStepGalois() {
@@ -522,42 +541,52 @@ const std::array<int,128> YamahaYm3812::kslTable {
     0,24,32,37,40,43,45,47,48,50,51,52,53,54,55,56
     };
 
-const std::array<int,64> YamahaYm3812::attackTable {
-    0, 0, 0, 0,
-    22254, 17739, 14836, 12578, 
-    11127, 8869, 7418, 6289, 
-    5563, 4435, 3709, 3145, 
-    2782, 2217, 1854, 1572, 
-    1391, 1109, 927, 786, 
-    695, 554, 464, 393, 
-    348, 277, 232, 197, 
-    174, 139, 116, 98, 
-    87, 69, 58, 49, 
-    43, 35, 29, 25, 
-    22, 17, 14, 12, 
-    11, 9, 7, 6, 
-    6, 5, 4, 3, 
-    3, 2, 2, 2, 
-    2, 2, 2, 2
+const std::array<float,4> YamahaYm3812::attackTableBase {
+    2826.24, 2252.8, 1884.16, 1597.44
 };
 
-const std::array<int,64> YamahaYm3812::decayTable {
-    0, 0, 0, 0,
-    309296, 247373, 206090, 176741, 
-    154648, 123686, 103045, 88370, 
-    77324, 61843, 51523, 44185, 
-    38662, 30922, 25761, 22093, 
-    19331, 15461, 12881, 11046, 
-    9666, 7730, 6440, 5523, 
-    4833, 3865, 3220, 2762, 
-    2416, 1933, 1610, 1381, 
-    1208, 966, 805, 690, 
-    604, 483, 403, 345, 
-    302, 242, 201, 173, 
-    151, 121, 101, 86, 
-    76, 60, 50, 43, 
-    38, 30, 25, 22, 
-    19, 19, 19, 19,
+const std::array<float, 4> YamahaYm3812::decayTableBase {
+    39280.64, 31416.32, 26173.44, 22446.08
+};
+
+// These are measured in microseconds per change of level
+std::array<int,64> YamahaYm3812::attackTable {
+    0, 0, 0, 0, // Skip level 0, because 0 means "no attack"
+    11083, 8835, 7389, 6264,
+    5542, 4417, 3694, 3132,
+    2771, 2209, 1847, 1566,
+    1385, 1104, 924, 783,
+    693, 552, 462, 392,
+    346, 276, 231, 196,
+    173, 138, 115, 98,
+    87, 69, 58, 49,
+    43, 35, 29, 24,
+    22, 17, 14, 12,
+    11, 9, 7, 6,
+    5, 4, 4, 3,
+    3, 2, 2, 2,
+    1, 1, 1, 1,
+    1, 1, 1, 1
+};
+
+// These are measured in microseconds per change of level
+std::array<int,64> YamahaYm3812::decayTable {
+    0, 0, 0, 0, // Skip level 0, because 0 means "no decay"
+    154042, 123201, 102641, 88024,
+    77021, 61601, 51320, 44012,
+    38510, 30800, 25660, 22006,
+    19255, 15400, 12830, 11003,
+    9628, 7700, 6415, 5501,
+    4814, 3850, 3208, 2751,
+    2407, 1925, 1604, 1375,
+    1203, 963, 802, 688,
+    602, 481, 401, 344,
+    301, 241, 200, 172,
+    150, 120, 100, 86,
+    75, 60, 50, 43,
+    38, 30, 25, 21,
+    19, 15, 13, 11,
+    9, 9, 9, 9
 };
 
 std::array<int,1024*4> YamahaYm3812::logsinTable;
@@ -566,3 +595,11 @@ const std::array<uint8_t,16> YamahaYm3812::multVal {1, 2, 4, 6, 8, 10, 12, 14, 1
 const int YamahaYm3812::NATIVE_SAMPLE_RATE;
 const std::array<std::string,5> YamahaYm3812::rhythmNames {"Bass Drum", "High Hat", 
                                                "Snare Drum", "Tom-tom", "Top Cymbal"};
+
+const std::array<std::string,5> YamahaYm3812::adsrPhaseNames {
+    "silent",
+    "attack",
+    "decay",
+    "sustain",
+    "release"
+};
