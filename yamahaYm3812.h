@@ -53,11 +53,9 @@ private:
     };
 
     static const std::array<std::string,5> adsrPhaseNames;
+    static const std::array<std::string,5> rhythmNames;
 
     static const std::array<uint8_t, 16> multVal;
-    static const std::array<std::string,5> rhythmNames;
-    static std::array<int,1024 * 4> logsinTable;
-    static std::array<int,256> expTable;
     static const std::array<int,210> amTable;
     static const std::array<int,64> fmTable;
     static const std::array<int,128> kslTable;
@@ -65,6 +63,10 @@ private:
     static std::array<int,64> attackTable;
     static const std::array<float,4> decayTableBase;
     static std::array<int,64> decayTable;
+
+    static std::array<int,1024 * 4> logsinTable;
+    static std::array<int,256> expTable;
+    
     static const int NATIVE_SAMPLE_RATE = 49716;
     static const int envAccumRate = 1'000'000 / OPL_SAMPLE_RATE; // Microseconds per sample
 
@@ -141,7 +143,9 @@ private:
 
         op_t modOp;
         op_t carOp;
-    } chan[9];
+    };
+    
+    std::array<chan_t, 9> chan;
 
     bool rhythmMode;          // Rhythm mode enabled
 
@@ -154,11 +158,12 @@ private:
         op_t* carOp;
     };
 
-    percChan_t percChan[5] = { {false, &chan[6], &chan[6].modOp, &chan[6].carOp},  // Bass Drum
+    std::array<percChan_t, 5> percChan {{
+                               {false, &chan[6], &chan[6].modOp, &chan[6].carOp},  // Bass Drum
                                {false, &chan[7], &chan[8].carOp, &chan[7].modOp}, // High Hat
                                {false, &chan[7], nullptr,        &chan[7].carOp},  // Snare Drum
                                {false, &chan[8], nullptr,        &chan[8].modOp}, // Tom-tom
-                               {false, &chan[8], &chan[7].modOp, &chan[8].carOp}}; // Top Cymbal
+                               {false, &chan[8], &chan[7].modOp, &chan[8].carOp}}}; // Top Cymbal
 
     enum rhythmInsts {
         bassDrum,

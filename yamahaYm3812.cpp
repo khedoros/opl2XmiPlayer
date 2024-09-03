@@ -61,19 +61,19 @@ void YamahaYm3812::WriteReg(int reg, int val) {
     reg &= 0xff;
 
     if((reg >= 0x20 && reg < 0xa0) || reg >= 0xe0) { // Register writes that affect the slots
-        const int8_t regChanNumber[32] {  0, 1, 2, 0, 1, 2, -1, -1,
-                                     3, 4, 5, 3, 4, 5, -1, -1,
-                                     6, 7, 8, 6, 7, 8, -1, -1,
-                                    -1,-1,-1,-1,-1,-1, -1, -1};
+        const std::array<int8_t,32> regChanNumber {  0, 1, 2, 0, 1, 2, -1, -1,
+                                                     3, 4, 5, 3, 4, 5, -1, -1,
+                                                     6, 7, 8, 6, 7, 8, -1, -1,
+                                                    -1,-1,-1,-1,-1,-1, -1, -1};
         if(regChanNumber[reg & 0x1f] == -1) return;
         enum slotType {
             MOD, CAR, INV
         };
 
-        const slotType regOpType[32]   { MOD, MOD, MOD, CAR, CAR, CAR, INV, INV,
-                                   MOD, MOD, MOD, CAR, CAR, CAR, INV, INV,
-                                   MOD, MOD, MOD, CAR, CAR, CAR, INV, INV,
-                                   INV, INV, INV, INV, INV, INV, INV, INV };
+        const std::array<slotType,32> regOpType { MOD, MOD, MOD, CAR, CAR, CAR, INV, INV,
+                                                  MOD, MOD, MOD, CAR, CAR, CAR, INV, INV,
+                                                  MOD, MOD, MOD, CAR, CAR, CAR, INV, INV,
+                                                  INV, INV, INV, INV, INV, INV, INV, INV };
         uint8_t chNum = regChanNumber[reg & 0x1f];
         slotType type = regOpType[reg & 0x1f];
 
@@ -196,6 +196,8 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                             channel.printChannel();
                             modOp.phaseCnt = 0;
                             carOp.phaseCnt = 0;
+                            modOp.modFB1 = 0;
+                            modOp.modFB2 = 0;
                             // printf("APU::YM3812 melody chan %d attack key-off->on\n", chNum);
                             // channel.printChannel();
                         }
@@ -231,6 +233,7 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                 break;
             case 0xc0:
                 carOp.conn = static_cast<op_t::connectionType>(val & 0x01);
+                modOp.conn = carOp.conn;
                 modOp.feedbackLevel = ((val >> 1) & 0x07);
                 break;
         }
@@ -297,7 +300,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
             if(carOp.envPhase != adsrPhase::silent) {
                 int feedback = (modOp.feedbackLevel) ? ((modOp.modFB1 + modOp.modFB2) >> (8 - modOp.feedbackLevel)) : 0;
 
-                int modSin = lookupSin((modOp.phaseCnt / 1024) - 1 +                              // phase
+                int modSin = lookupSin((modOp.phaseCnt / 1024) +                              // phase
                                        modOp.fmShift +                                            // modification for vibrato
                                        (feedback),                                               // modification for feedback
                                        modOp.waveform);
@@ -313,7 +316,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                 if(carOp.conn == op_t::connectionType::fm) {
                     int carSin = lookupSin((carOp.phaseCnt  / 1024) +                                 // phase
                                         carOp.fmShift +                                        // modification for vibrato
-                                        (modOut),                                             // fm modulation
+                                        (2 * modOut),                                             // fm modulation
                                         carOp.waveform);
 
                     sample+=lookupExp((carSin) +                                                  // sine input
@@ -579,7 +582,7 @@ void YamahaYm3812::op_t::printOperator() {
     std::cout<<"0x40: KSL:"<<keyScaleLevel<<" TL:"<<totalLevel<<"\n";
     std::cout<<"0x60: AR:"<<attackRate<<" DR:"<<decayRate<<"\n";
     std::cout<<"0x80: SL:"<<sustainLevel<<" RR:"<<releaseRate<<"\n";
-    std::cout<<"0xC0: Feedback:"<<feedbackLevel<<" AM Connection:"<<conn<<"\n";
+    std::cout<<"0xC0: Feedback:"<<feedbackLevel<<" AM Connection:"<<(conn==fm ? "fm" : "am")<<"\n";
     std::cout<<"0xE0: Waveform:"<<waveform<<"\n";
 }
 
