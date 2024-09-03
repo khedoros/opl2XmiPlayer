@@ -20,6 +20,8 @@ public:
 
 private:
     class inst_t;
+    class op_t;
+    class percChan_t;
 
     void updatePhases();
     void updateEnvelopes();
@@ -43,7 +45,7 @@ private:
     static const int fmPhaseSampleLength = (OPL_SAMPLE_RATE * 1024) / NATIVE_OPL_SAMPLE_RATE;
 
     enum adsrPhase {
-        silent,         //Note hit envelope==48dB
+        silent,         //Note hit envelope==96dB
         attack,         //New note rising after key-on
         decay,          //Initial fade to sustain level after reaching max volume
         sustain,        //Level to hold at until key-off, or level at which to transition from decay to sustainRelease phase
@@ -70,10 +72,13 @@ private:
     int lookupSin(int val, int waveForm);
     int lookupExp(int val);
     int convertWavelength(int wavelength);
+    int lfsrStepGalois();
+    uint32_t galoisState; // LFSR state for the rhythem channels
+    bool galoisBit;
 
     struct op_t {
         void updateEnvelope(unsigned int envCounter);
-        int lfsrStepGalois();
+        void printOperator();
         unsigned phaseInc:20;    // Basically the frequency, generated from the instrument's mult, and the fNum and octave/block for the channel
         unsigned phaseCnt:20;    // Current place in the sine phase. 10.10 fixed-point number, where the whole selects the sine sample to use
 
@@ -92,9 +97,6 @@ private:
         };
         // Connection type between modulator and carrier
         connectionType conn; // How second slot treats first slot's output
-
-
-        bool releaseSustain;   //1=key-off has release-rate at 5, 0=key-off has release rate at 7 (both with KSR adjustment)
 
         adsrPhase envPhase;
         int envLevel; // 0 - 255. 0.375dB steps (add envLevel * 0x10)
@@ -123,11 +125,10 @@ private:
 
         //reg e0
         unsigned waveform:2;
-
-        uint32_t galoisState; // LFSR state for the rhythem channels
     };
 
     struct chan_t {
+        void printChannel();
         unsigned fNum: 10; // 2nd of 3 elements that define the frequency
         bool keyOn; //on-off state of the key
         unsigned int octave: 3; //3rd element that defines the frequency
@@ -145,17 +146,19 @@ private:
     bool rhythmMode;          // Rhythm mode enabled
 
     struct percChan_t {
-        bool keyOn;
+        void keyOff();
+        void keyOn();
+        bool key;
         chan_t* chan;
         op_t* modOp; // nullptr for everything but bass drum
         op_t* carOp;
     };
 
     percChan_t percChan[5] = { {false, &chan[6], &chan[6].modOp, &chan[6].carOp},  // Bass Drum
-                               {false, &chan[7], nullptr,        &chan[7].modOp}, // High Hat
+                               {false, &chan[7], &chan[8].carOp, &chan[7].modOp}, // High Hat
                                {false, &chan[7], nullptr,        &chan[7].carOp},  // Snare Drum
                                {false, &chan[8], nullptr,        &chan[8].modOp}, // Tom-tom
-                               {false, &chan[8], nullptr,        &chan[8].carOp}}; // Top Cymbal
+                               {false, &chan[8], &chan[7].modOp, &chan[8].carOp}}; // Top Cymbal
 
     enum rhythmInsts {
         bassDrum,
