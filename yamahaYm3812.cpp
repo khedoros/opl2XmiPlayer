@@ -384,7 +384,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                             bitComponent = ((carOp->phaseCnt) & (1<9));
                             if(bitComponent && galoisBit) modOut = 0x8000; // -max value
                             else if(!bitComponent && !galoisBit) modOut = 0; // +max value
-                            else modOut = 4095; // zero value
+                            else modOut = 0xfff; // zero value
                             sample += 2 * lookupExp((modOut) +
                                                     (carOp->envLevel * 0x10) +
                                                     (carOp->totalLevel) * 0x20);
@@ -437,14 +437,14 @@ void YamahaYm3812::initTables() {
                 case 0: break; // full sine wave; already covered.
                 case 1: // half sine wave (positive half, set negative half to 0)
                     if(!sign) logsinTable[wf*1024+i] = logsinTable[i];
-                    else      logsinTable[wf*1024+i] = 0x8000; // constant for -0 value
+                    else      logsinTable[wf*1024+i] = 0x8fff; // constant for -0 value
                     break;
                 case 2: // rectified sine wave (double-bumps)
                     logsinTable[wf*1024+i] = logsinTable[i & 511];
                     break;
                 case 3: // pseudo-saw (only the 1st+3rd quarters of the wave is defined, and are both positive)
                     if(!mirror) logsinTable[wf*1024+i] = logsinTable[i&255];
-                    else        logsinTable[wf*1024+i] = 0x8000;
+                    else        logsinTable[wf*1024+i] = 0x8fff;
             }
         }
 
