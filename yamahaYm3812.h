@@ -70,6 +70,11 @@ private:
     static const int NATIVE_SAMPLE_RATE = 49716;
     static const int envAccumRate = 1'000'000 / OPL_SAMPLE_RATE; // Microseconds per sample
 
+    static const int POS_MAX = 0;
+    static const int NEG_MAX = 0x8000;
+    static const int POS_ZERO = 0xfff;
+    static const int NEG_ZERO = 0x8fff;
+
     void initTables();
     int lookupSin(int val, int waveForm);
     int lookupExp(int val);
