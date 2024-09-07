@@ -250,7 +250,7 @@ bool write_patches(uw_patch_file& uwpf,int patchIndex) {
 }
 
 int main(int argc, char* argv[]) {
-    if(argc != 2) {
+    if(argc < 2) {
         std::cout<<"Provide a timbre library as the first argument.\n";
         return 1;
     }
@@ -264,7 +264,15 @@ int main(int argc, char* argv[]) {
 
     int patchNum = 0;
     int bankNum = 0;
-    write_patches(uwpf, bankNum, patchNum);
+    if(argc == 4) {
+        bankNum = std::atoi(argv[2]);
+        patchNum = std::atoi(argv[3]);
+    }
+
+    if(!write_patches(uwpf,bankNum,patchNum)) {
+        std::cout<<"Patch "<<bankNum<<":"<<patchNum<<" couldn't be loaded. Loading first entry, "<<uwpf.bank_data[0].bank<<":"<<uwpf.bank_data[1].patch<<" instead.\n";
+        write_patches(uwpf, uwpf.bank_data[0].bank, uwpf.bank_data[0].patch);
+    }
 
     calc_freqs();
 
