@@ -72,8 +72,8 @@ private:
 
     static const int POS_MAX = 0;
     static const int NEG_MAX = 0x8000;
-    static const int POS_ZERO = 0xfff;
-    static const int NEG_ZERO = 0x8fff;
+    static const int POS_ZERO = 0xa00;
+    static const int NEG_ZERO = 0x8a00;
 
     void initTables();
     int lookupSin(int val, int waveForm);

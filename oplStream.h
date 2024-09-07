@@ -6,6 +6,7 @@
 #include<cstring>
 #include<SDL2/SDL.h>
 #include "opl.h"
+#include<fstream>
 
 class oplStream : public OPLEmul {
     private:
@@ -24,6 +25,7 @@ class oplStream : public OPLEmul {
         int sdlDevId;
         bool stopped;
         bool handleEvents;
+        // std::ofstream outfile;
     public:
 #ifdef JAVA_OPL
         oplStream(bool doEvents = true) : opl(JavaOPLCreate(stereoChannels == 2)),remainingMilliseconds{0}, stopped{false}, handleEvents{doEvents} {
@@ -33,6 +35,7 @@ class oplStream : public OPLEmul {
             std::cout<<"Init the stream to "<<stereoChannels<<" channels, "<<sampleRate<<"Hz sample rate\n";
             initSDLAudio();
             pause();
+            // outfile.open("opl_raw_out.bin");
         }
         ~oplStream() {
             std::cout<<"Deconstruct the stream\n";
@@ -58,6 +61,7 @@ class oplStream : public OPLEmul {
                 opl->Update(buffer.data(), sampleChunkSize / stereoChannels);
                 remainingMilliseconds -= sampleChunkTimeInMs;
                 SDL_QueueAudio(sdlDevId, buffer.data(), sampleChunkSize * sizeof(int16_t));
+                // outfile.write(reinterpret_cast<char*>(buffer.data()), sampleChunkSize * sizeof(int16_t));
 
                 while(SDL_GetQueuedAudioSize(sdlDevId) > 5 * sampleChunkSize * sizeof(int16_t)) {
                     if(handleEvents) {
