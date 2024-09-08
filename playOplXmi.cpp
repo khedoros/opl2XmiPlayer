@@ -280,8 +280,18 @@ bool copy_patch(int voice, int noteIndex) {
     }
 
     std::vector<uint8_t>& pat = channel_patch[channel]->ad_patchdata;
-
     bool am = channel_patch[channel]->ad_patchdatastruct.connection;
+
+    #ifndef GM_MODE
+    if(channel == 9) {
+        for(auto& patch: uwpf.bank_data) {
+            if(patch.patch == note_midi_num[noteIndex] && patch.bank == 127) {
+                pat = patch.ad_patchdata;
+                am = patch.ad_patchdatastruct.connection;
+            }
+        }
+    }
+    #endif
 
     //Write the values to the modulator:
     uint8_t mod_avekm = pat[uw_patch_file::patchIndices::mod_avekm];
@@ -417,6 +427,7 @@ int main(int argc, char* argv[]) {
                 std::cout<<"Note overflow, untracked note\n";
                 break;
             }
+
             midi_num = midi_data[1];
             if(midi_num < 12 || midi_num > 108) break; // unsupported note range
             midi_velocity = midi_data[2];
