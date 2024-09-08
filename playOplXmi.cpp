@@ -448,13 +448,19 @@ int main(int argc, char* argv[]) {
             writeVolume(note_index);
             break;
         case midi_event::PROGRAM_CHANGE: //0xc0
-//            if(channel_patch_num[channel] == midiTranslate[midi_data[1]]) {
+#ifdef GM_MODE
+            if(channel_patch_num[channel] == midiTranslate[midi_data[1]]) {
+#else
             if(channel_patch_num[channel] == midi_data[1]) {
+#endif
                 std::cout<<"No change in patch number\n";
             }
             else {
-//                channel_patch_num[channel] = midiTranslate[midi_data[1]];
+#ifdef GM_MODE
+                channel_patch_num[channel] = midiTranslate[midi_data[1]];
+#else
                 channel_patch_num[channel] = midi_data[1];
+#endif
                 for(auto& patch: uwpf.bank_data) {
                     if(patch.patch == channel_patch_num[channel] && patch.bank == channel_bank_num[channel]) {
                         channel_patch[channel] = &patch;
