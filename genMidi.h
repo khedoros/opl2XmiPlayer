@@ -1,3 +1,5 @@
+// Basic loader for the Doom GENMIDI lump, containing the game's instrument definitions
+
 #pragma once
 #include<cstdint>
 #include<string>
