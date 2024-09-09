@@ -187,17 +187,17 @@ void YamahaYm3812::WriteReg(int reg, int val) {
                     }
                     else if(newKeyOn) { // keyOn event
                         if(!channel.keyOn) { // Key wasn't pressed before 
-                            modOp.phaseCnt = 0;
+                            modOp.phaseCnt = modOp.phaseInc;
                             carOp.phaseCnt = 0;
                             modOp.modFB1 = 0;
                             modOp.modFB2 = 0;
                             modOp.envAccum = 0;
                             carOp.envAccum = 0;
                             //printf("APU::YM3812 melody chan %d attack key-off->on\n", chNum);
-                            // channel.printChannel();
+                            //channel.printChannel();
                         }
                         //else {
-                        //    printf("APU::YM3812 melody chan %d attack key-on->on\n", chNum);
+                            //printf("APU::YM3812 melody chan %d attack key-on->on\n", chNum);
                         //}
 
                         if(modOp.attackRate == 15) { // AR==15 jumps the volume to full in 1 step, and transitions immediately into decay.
@@ -416,7 +416,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                 }
             }
         }
-        buffer[i] = sample << 2;
+        buffer[i] = sample << 1;
         if(audioChannels == 2) {
             buffer[i+1] = buffer[i];
         }
@@ -429,8 +429,7 @@ void YamahaYm3812::initTables() {
         logsinTable[511 - i] = logsinTable[i];
         logsinTable[512 + i] = 0x8000 | logsinTable[i];
         logsinTable[1023 - i] = logsinTable[512+i];
-        // expTable[i] = round(exp2(double(i) / 256.0) * 1024.0) - 1024.0;
-        expTable[255-i] = int(round(exp2(double(i) / 256.0) * 1024.0)) << 1;
+        expTable[255-i] = int(round(exp2(double(i) / 256.0) * 1024.0));
     }
     for(int i = 0; i < 1024; ++i) {
         bool sign = i & 512;
@@ -462,8 +461,8 @@ int YamahaYm3812::lookupSin(int val, int wf) {
 int YamahaYm3812::lookupExp(int val) {
     bool sign = val & 0x8000;
     int t = expTable[(val & 255)];
-    int result = (t >> ((val & 0x7F00) >> 8)) >> 2;
-    if (sign) result = -result;
+    int result = (t >> ((val & 0x7F00) >> 8));
+    if (sign) result = ~result;
     return result;
 }
 

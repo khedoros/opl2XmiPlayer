@@ -32,6 +32,7 @@ std::array<int8_t, MIDI_NOTE_COUNT> note_channel {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
 std::array<int8_t, MIDI_NOTE_COUNT> note_midi_num;
 std::array<int8_t, MIDI_NOTE_COUNT> note_velocity;
 std::array<int8_t, MIDI_NOTE_COUNT> note_voice;
+int8_t rhythm_channel_note;
 
 //Data and methods having to do with current use of OPL channels, voice assignments, etc
 #ifdef JAVA_OPL
@@ -268,7 +269,7 @@ void writeVolume(int8_t note_num) {
 }
 
 //Copies the given patch data into the given voice slot
-                //OPL voice #, bank #,       instrument patch #
+                //OPL voice #, index to the note information
 bool copy_patch(int voice, int noteIndex) {
     int channel = note_channel[noteIndex];
 
@@ -283,11 +284,12 @@ bool copy_patch(int voice, int noteIndex) {
     bool am = channel_patch[channel]->ad_patchdatastruct.connection;
 
     #ifndef GM_MODE
-    if(channel == 9) {
+    if(channel == 9) { // In MT-32 mode, channel 9 (0-based) is always rhythm. The MIDI note is the instrument, and the transpose value is the actual MIDI note to play.
         for(auto& patch: uwpf.bank_data) {
             if(patch.patch == note_midi_num[noteIndex] && patch.bank == 127) {
                 pat = patch.ad_patchdata;
                 am = patch.ad_patchdatastruct.connection;
+                rhythm_channel_note = pat[uw_patch_file::patchIndices::transpose];
             }
         }
     }
@@ -451,8 +453,14 @@ int main(int argc, char* argv[]) {
                 break;
             }
 
-            block = get<1>(freqs[midi_num]);
-            f_num = get<2>(freqs[midi_num]);
+            if(channel == 9) {
+                block = get<1>(freqs[rhythm_channel_note]);
+                f_num = get<2>(freqs[rhythm_channel_note]);
+            }
+            else {
+                block = get<1>(freqs[midi_num]);
+                f_num = get<2>(freqs[midi_num]);
+            }
 
             opl->WriteReg(voice_base2[voice_num]+0xa0, (f_num&0xff));
             opl->WriteReg(voice_base2[voice_num]+0xb0, 0x20 + (block<<(2)) + ((f_num&0xff00)>>(8)));
