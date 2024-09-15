@@ -122,28 +122,6 @@ bool uw_patch_file::load(std::string fna, std::string fnm /*= ""*/) {
     }
     if(!load_patches(ina)) return false;
     if(fnm != "" && !load_patches(inm)) return false;
-    #ifdef STAND_ALONE_PATCH
-    for(auto it = bank_data.begin(); it != bank_data.end(); ++it) {
-        std::cout<<std::dec<<"Bank: "<<int(it->bank)<<" Patch: "<<int(it->patch);
-        if(it->name != "") {
-            std::cout<<" Name: "<<it->name;
-        }
-        if(it->mt_patchdata.size() > 0) std::cout<<" Has MT-32  Data, size: "<<it->mt_patchdata.size()<<"\n";
-        if(it->ad_patchdata.size() > 0) {
-            std::cout<<" Has Adblib Data, size: "<<it->ad_patchdata.size()<<"  {\n";
-            for(auto it2 = it->ad_patchdata.begin(); it2 != it->ad_patchdata.end(); ++it2) {
-                std::cout<<std::hex<<" "<<int(*it2)<<std::dec;
-            }
-            std::cout<<"\n}"<<std::endl;
-            if(it->has_opl2) {
-                print_opl(it->ad_patchdatastruct);
-            }
-            else if(it->has_tvfx) {
-                print_tvfx(it->tv_patchdatastruct);
-            }
-        }
-    }
-    #endif
     return true;
 }
 
@@ -183,21 +161,22 @@ int main(int argc, char *argv[]) {
         if(it->name != "") {
             std::cout<<" Name: "<<it->name;
         }
+        std::cout<<"\n";
         if(it->mt_patchdata.size() > 0) std::cout<<" Has MT-32  Data, size: "<<it->mt_patchdata.size()<<"\n";
         if(it->ad_patchdata.size() > 0) {
-        std::cout<<" Has Adblib Data, size: "<<it->ad_patchdata.size()<<"  {\n";
-        for(auto it2 = it->ad_patchdata.begin(); it2 != it->ad_patchdata.end(); ++it2) {
-            std::cout<<std::hex<<" "<<int(*it2)<<std::dec;
+            std::cout<<" Has Adblib Data, size: "<<it->ad_patchdata.size()<<"  {\n";
+            for(auto it2 = it->ad_patchdata.begin(); it2 != it->ad_patchdata.end(); ++it2) {
+                std::printf(" %02x", *it2);
+            }
+            std::cout<<"\n}"<<std::endl;
+            if(it->has_opl2) {
+                uw_patch_file::print_opl(it->ad_patchdatastruct);
+            }
+            else if(it->has_tvfx) {
+                uw_patch_file::print_tvfx(it->tv_patchdatastruct);
+            }
         }
-        std::cout<<"\n}"<<std::endl;
-        if(it->has_opl2) {
-            uw_patch_file::print_opl(it->ad_patchdatastruct);
-        }
-        else if(it->has_tvfx) {
-            uw_patch_file::print_tvfx(it->tv_patchdatastruct);
-        }
-    }
-        uw_patch_file::print_opl(it->ad_patchdatastruct);
+        std::cout<<"\n";
     }
 }
 #endif
