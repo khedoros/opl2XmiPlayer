@@ -182,9 +182,12 @@ void TVFX_increment_stage(int slotIndex, uint16_t* offset) {
             else {
                 *counter = command;
                 *increment = data;
+                return;
             }
         }
     }
+    *increment = 0;
+    *counter = 0xffff;
 }
 
 // ; Subroutine handles setting values to update when necessary, decrementing TVFX counters, calling the TVFX iterator when they run out, etc
@@ -206,7 +209,7 @@ void serve_synth() {
             S_f_counter[slot]--;
             if(S_f_counter[slot] == 0) {
                 TVFX_increment_stage(slot, &S_f_offset);
-                S_update[si] |= U_FREQ;
+                S_update[slot] |= U_FREQ;
             }
 
             // Increment feedback
@@ -217,7 +220,7 @@ void serve_synth() {
             S_fb_counter[slot]--;
             if(S_fb_counter[slot] == 0) {
                 TVFX_increment_stage(slot, &S_fb_offset);
-                S_update[si] |= U_FBC;
+                S_update[slot] |= U_FBC;
             }
 
             // Increment modulator multiplier
@@ -228,7 +231,7 @@ void serve_synth() {
             S_m0_counter[slot]--;
             if(S_m0_counter[slot] == 0) {
                 TVFX_increment_stage(slot, &S_m0_offset);
-                S_update[si] |= U_AVEKM;
+                S_update[slot] |= U_AVEKM;
             }
 
             // Increment carrier multiplier
@@ -239,7 +242,7 @@ void serve_synth() {
             S_m1_counter[slot]--;
             if(S_m1_counter[slot] == 0) {
                 TVFX_increment_stage(slot, &S_m1_offset);
-                S_update[si] |= U_AVEKM;
+                S_update[slot] |= U_AVEKM;
             }
 
             // Increment volume0
@@ -292,7 +295,7 @@ void serve_synth() {
             S_ws_counter[slot]--;
             if(S_ws_counter[slot] == 0) {
                 TVFX_increment_stage(slot, &S_ws_offset);
-                S_update[si] |= U_WS;
+                S_update[slot] |= U_WS;
             }
 
             S_p_val[slot] += S_p_increment[slot];
@@ -302,7 +305,7 @@ void serve_synth() {
             }
 
             if(S_update[slot] != 0) {
-                update_voice[slot];
+                update_voice(slot);
             }
 
             if(!S_status[slot] == KEYOFF) {
