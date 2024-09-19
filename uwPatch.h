@@ -3,6 +3,7 @@
 
 #include<stdint.h>
 #include<vector>
+#include<array>
 #include<iostream>
 
 class binifstream;
@@ -187,7 +188,60 @@ public:
         for(auto i: p.update_data) {
             std::printf("%04x ", i);
         }
-        std::cout<<'\n';
+        std::cout<<"\n";
+        std::array<std::string, 8> labels {"Frequency","TL0","TL1","Priority","Feedback","Mult0","Mult1","Waveform"};
+        std::array<uint16_t, 8> offsets {p.init.keyon_f_offset,p.init.keyon_v0_offset,p.init.keyon_v1_offset,p.init.keyon_p_offset,
+                                          p.init.keyon_fb_offset,p.init.keyon_m0_offset,p.init.keyon_m1_offset,p.init.keyon_ws_offset};
+        for(int element = 0; element < 8; element++) {
+            std::cout<<labels[element]<<": ";
+            uint16_t dataOffset = (offsets[element] - p.init.keyon_f_offset) / 2;
+            for(int c=0;c<10;c++) {
+                uint16_t command = p.update_data[dataOffset+0];
+                int16_t data = p.update_data[dataOffset+1];
+                if(command == 0) {
+                    dataOffset += (data / 2);
+                    std::printf("increment offset by %d, ", data/2);
+                }
+                else {
+                    dataOffset += 2;
+                    if(command == 0xffff) {
+                        std::printf("val=%04x, ", data);
+                    }
+                    else if(command == 0xfffe) { // These each have a different exact effect, depending on the 
+                        switch(element) {
+                            case 0:
+                                std::printf("block=%02x, ", data>>8);
+                                break;
+                            case 1:
+                                std::printf("KSLTL_0=%02x, ", data&0xff);
+                                break;
+                            case 2:
+                                std::printf("KSLTL_1=%02x, ", data&0xff);
+                                break;
+                            case 3:
+                                std::printf("priority no-op, ");
+                                break;
+                            case 4:
+                                std::printf("FBC=%02x", data>>8);
+                                break;
+                            case 5:
+                                std::printf("AVEKM_0=%02x, ", data&0xff);
+                                break;
+                            case 6:
+                                std::printf("AVEKM_1=%02x, ", data&0xff);
+                                break;
+                            case 7:
+                                std::printf("waveform no-op, ");
+                                break;
+                        }
+                    }
+                    else {
+                        std::printf("count=%04x increment=%04x (break) -> ", command, data);
+                    }
+                }
+            }
+            std::cout<<" loop done (break)\n";
+        }
     }
 
     bool load(std::string fna, std::string fnm = "");
