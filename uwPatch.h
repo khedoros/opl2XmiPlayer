@@ -121,15 +121,15 @@ public:
     };
 
     struct __attribute__((packed)) tvfx_init_opt {
-        uint8_t keyon_ad_1;
         uint8_t keyon_sr_1;
-        uint8_t keyon_ad_0;
+        uint8_t keyon_ad_1;
         uint8_t keyon_sr_0;
+        uint8_t keyon_ad_0;
 
-        uint8_t release_ad_1;
         uint8_t release_sr_1;
-        uint8_t release_ad_0;
+        uint8_t release_ad_1;
         uint8_t release_sr_0;
+        uint8_t release_ad_0;
     };
 
     struct tvfx_patch {

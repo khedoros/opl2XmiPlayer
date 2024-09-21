@@ -1624,7 +1624,7 @@ __set_M_freq:   shl bl,1                ;merge F-NUM(H) with block #
 
         send_byte(voice, 0xa0, f_num & 0xff);
         S_KBF_shadow[slot] = ((f_num >> 8) | S_BLOCK[slot]);
-        send_byte(voice, 0xb0, (f_num >> 8) | S_BLOCK[slot]);
+        send_byte(voice, 0xb0, S_KBF_shadow[slot]);
         S_update[slot] &= (~U_FREQ);
     }   
 }
