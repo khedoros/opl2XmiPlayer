@@ -180,8 +180,7 @@ void writeVolume(oplStream& opl, int voice_num) {
                                                    ((car_ksl & 0x3)<<(6))));
 }
 
-//Copies the given simple instrument patch data into the given voice slot
-                //OPL voice #, bank #,       instrument patch #
+// Sets up the voice for the tvfx keyon and keyoff stages
 bool switch_tvfx_phase(oplStream& opl, int voice) {
     if(voice == -1 || voice >= OPL_VOICE_COUNT) {
         std::cerr<<"Invalid voice\n";
@@ -209,24 +208,27 @@ bool switch_tvfx_phase(oplStream& opl, int voice) {
     }
 
     if(!pat.uses_opt) { // Apply default ADSR values
+        std::printf("default adsr %02x%02x %02x%02x\n", 0xff, 0x0f, 0xff, 0x0f);
         opl.WriteReg(voice_base_mod[voice]+AD, 0xff);
         opl.WriteReg(voice_base_mod[voice]+SR, 0x0f);
         opl.WriteReg(voice_base_car[voice]+AD, 0xff);
         opl.WriteReg(voice_base_car[voice]+SR, 0x0f);
     }
-    else if(keyOn) { // ADSR values defined by the sound effect timbre
-        std::printf("%02x%02x %02x%02x\n", pat.opt.keyon_ad_0, pat.opt.keyon_sr_0, pat.opt.keyon_ad_1, pat.opt.keyon_sr_1);
-        opl.WriteReg(voice_base_mod[voice]+AD, pat.opt.keyon_ad_0);
-        opl.WriteReg(voice_base_mod[voice]+SR, pat.opt.keyon_sr_0);
-        opl.WriteReg(voice_base_car[voice]+AD, pat.opt.keyon_ad_1);
-        opl.WriteReg(voice_base_car[voice]+SR, pat.opt.keyon_sr_1);
-    }
     else {
-        std::printf("%02x%02x %02x%02x\n", pat.opt.release_ad_0, pat.opt.release_sr_0, pat.opt.release_ad_1, pat.opt.release_sr_1);
-        opl.WriteReg(voice_base_mod[voice]+AD, pat.opt.release_ad_0);
-        opl.WriteReg(voice_base_mod[voice]+SR, pat.opt.release_sr_0);
-        opl.WriteReg(voice_base_car[voice]+AD, pat.opt.release_ad_1);
-        opl.WriteReg(voice_base_car[voice]+SR, pat.opt.release_sr_1);
+        if(keyOn) { // ADSR values defined by the sound effect timbre
+            std::printf("keyon adsr %02x%02x %02x%02x\n", pat.opt.keyon_ad_0, pat.opt.keyon_sr_0, pat.opt.keyon_ad_1, pat.opt.keyon_sr_1);
+            opl.WriteReg(voice_base_mod[voice]+AD, pat.opt.keyon_ad_0);
+            opl.WriteReg(voice_base_mod[voice]+SR, pat.opt.keyon_sr_0);
+            opl.WriteReg(voice_base_car[voice]+AD, pat.opt.keyon_ad_1);
+            opl.WriteReg(voice_base_car[voice]+SR, pat.opt.keyon_sr_1);
+        }
+        else {
+            std::printf("keyoff adsr %02x%02x %02x%02x\n", pat.opt.release_ad_0, pat.opt.release_sr_0, pat.opt.release_ad_1, pat.opt.release_sr_1);
+            opl.WriteReg(voice_base_mod[voice]+AD, pat.opt.release_ad_0);
+            opl.WriteReg(voice_base_mod[voice]+SR, pat.opt.release_sr_0);
+            opl.WriteReg(voice_base_car[voice]+AD, pat.opt.release_ad_1);
+            opl.WriteReg(voice_base_car[voice]+SR, pat.opt.release_sr_1);
+        }
     }
 
     // Original offsets were based on byte offsets in the whole timbre
@@ -252,11 +254,6 @@ bool switch_tvfx_phase(oplStream& opl, int voice) {
         tvfxElements[voice][mult0].value = pat.init.init_m0_val;
         tvfxElements[voice][mult1].value = pat.init.init_m1_val;
         tvfxElements[voice][waveform].value = pat.init.init_ws_val;
-
-        for(int element = 0; element < TVFX_ELEMENT_COUNT; element++) {
-            tvfxElements[voice][element].counter = 1;
-            tvfxElements[voice][element].increment = 0;
-        }
     }
     else {
         tvfxElements[voice][freq].offset = (pat.init.release_f_offset - pat.init.keyon_f_offset) / 2;
@@ -267,6 +264,11 @@ bool switch_tvfx_phase(oplStream& opl, int voice) {
         tvfxElements[voice][mult0].offset = (pat.init.release_m0_offset - pat.init.keyon_f_offset) / 2;
         tvfxElements[voice][mult1].offset = (pat.init.release_m1_offset - pat.init.keyon_f_offset) / 2;
         tvfxElements[voice][waveform].offset = (pat.init.release_ws_offset - pat.init.keyon_f_offset) / 2;
+    }
+
+    for(int element = 0; element < TVFX_ELEMENT_COUNT; element++) {
+        tvfxElements[voice][element].counter = 1;
+        tvfxElements[voice][element].increment = 0;
     }
 
     tvfx_update[voice] = U_ALL;
@@ -421,12 +423,8 @@ void iterateTvfx(oplStream& opl) {
 
         for(uint element = 0; element < TVFX_ELEMENT_COUNT; element++) {
             bool changed = false;
-            tvfxElements[voice][element].counter--;
-            //std::cout<<"Counter for "<<element<<": "<<*counters[element]<<"\n";
-            if(!tvfxElements[voice][element].counter) {
-                changed = iterateTvfxCommandList(opl, voice, static_cast<tvfxOffset>(element));
-            }
-            else if(tvfxElements[voice][element].increment != 0) {
+
+            if(tvfxElements[voice][element].increment != 0) {
                 changed = true;
                 uint16_t previous = tvfxElements[voice][element].value;
                 tvfxElements[voice][element].value += tvfxElements[voice][element].increment;
@@ -438,6 +436,13 @@ void iterateTvfx(oplStream& opl) {
                     }
                 }
             }
+
+            tvfxElements[voice][element].counter--;
+            //std::cout<<"Counter for "<<element<<": "<<*counters[element]<<"\n";
+            if(!tvfxElements[voice][element].counter) {
+                changed = iterateTvfxCommandList(opl, voice, static_cast<tvfxOffset>(element));
+            }
+
             if(changed) {
                 tvfx_update[voice] |= (1<<element);
             }
@@ -573,29 +578,30 @@ std::unordered_map<int, int> keyMap {
     
 };
 
-bool write_patches(oplStream& opl, uw_patch_file& uwpf,int bankNum, int patchNum) {
-    for(auto& patch: uwpf.bank_data) {
+int write_patches(oplStream& opl, uw_patch_file& uwpf,int bankNum, int patchNum) {
+    for(int p = 0; p < uwpf.bank_data.size(); p++) {//auto& patch: uwpf.bank_data) {
+        auto& patch = uwpf.bank_data[p];
         if(patch.bank == bankNum && patch.patch == patchNum) {
             std::cout<<"Copying "<<bankNum<<":"<<patchNum<<" ("<<patch.name<<") to voice slots\n";
             for(int i = 0; i < OPL_VOICE_COUNT; i++) {
                 voice_patch[i] = &patch;
                 note_off(opl, voice_midi_num[i]);
             }
-            return true;
+            return p;
         }
     }
     std::cout<<"Patch "<<bankNum<<":"<<patchNum<<" not found.\n";
-    return false;
+    return -1;
 }
 
-bool write_patches(oplStream& opl, uw_patch_file& uwpf,int patchIndex) {
+int write_patches(oplStream& opl, uw_patch_file& uwpf,int patchIndex) {
     auto& patch = uwpf.bank_data[patchIndex % uwpf.bank_data.size()];
     std::cout<<"Copying "<<int(patch.bank)<<":"<<int(patch.patch)<<"("<<patch.name<<") to voice slots\n";
     for(int i = 0; i < OPL_VOICE_COUNT; i++) {
         voice_patch[i] = &patch;
         note_off(opl, voice_midi_num[i]);
     }
-    return true;
+    return patchIndex % uwpf.bank_data.size();
 }
 
 int main(int argc, char* argv[]) {
@@ -618,9 +624,11 @@ int main(int argc, char* argv[]) {
         patchNum = std::atoi(argv[3]);
     }
 
-    if(!write_patches(*opl, uwpf,bankNum,patchNum)) {
-        std::cout<<"Patch "<<bankNum<<":"<<patchNum<<" couldn't be loaded. Loading first entry, "<<uwpf.bank_data[0].bank<<":"<<uwpf.bank_data[1].patch<<" instead.\n";
-        write_patches(*opl, uwpf, uwpf.bank_data[0].bank, uwpf.bank_data[0].patch);
+    int patchIndex = write_patches(*opl, uwpf, bankNum, patchNum);
+    if(patchIndex == -1) {
+        std::cout<<"Patch "<<bankNum<<":"<<patchNum<<" couldn't be loaded. Loading first entry, "<<uwpf.bank_data[0].bank<<":"<<uwpf.bank_data[0].patch<<" instead.\n";
+        write_patches(*opl, uwpf, 0);
+        patchIndex = 0;
     }
 
     calc_freqs();
@@ -655,14 +663,14 @@ int main(int argc, char* argv[]) {
                             quit = true;
                             break;
                         case SDLK_EQUALS:
-                            patchNum++;
-                            patchNum %= uwpf.bank_data.size();
-                            write_patches(*opl, uwpf, patchNum);
+                            patchIndex++;
+                            patchIndex %= uwpf.bank_data.size();
+                            write_patches(*opl, uwpf, patchIndex);
                             break;
                         case SDLK_MINUS:
-                            patchNum--;
-                            if(patchNum < 0) patchNum = uwpf.bank_data.size() - 1;
-                            write_patches(*opl, uwpf, patchNum);
+                            patchIndex--;
+                            if(patchIndex < 0) patchIndex = uwpf.bank_data.size() - 1;
+                            write_patches(*opl, uwpf, patchIndex);
                             break;
                     }
                 }
