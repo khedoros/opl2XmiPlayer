@@ -1523,9 +1523,9 @@ void update_voice(uint16_t slot) {
         S_update[slot] &= (~U_WS);                   //           call write_register C,voice0,0e0h,ax
     }
     if(S_update[slot] & U_FBC) {
-        fb_val >>= 4;
-        fb_val &= 0b1110;
-        int fbc = FBC & 1;
+        fb_val >>= 12;  // Take the top 4 bits
+        fb_val &= 0b1110; // Clear bottom for connection
+        int fbc = FBC & 1; // Clear all but connection data
         send_byte(voice, 0xc0, fb_val | fbc);
         S_update[slot] &= (~U_FBC);
     }

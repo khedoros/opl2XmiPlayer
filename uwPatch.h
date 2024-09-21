@@ -170,7 +170,7 @@ public:
     }
  
     static void print_tvfx(tvfx_patch p) {
-        std::printf("Size: %04x\nTranspose: %02x\nType: %02x\nDuration (in 120Hz ticks): %d\n", p.init.size, p.init.transpose, p.init.type, p.init.duration);
+        std::printf("Size: %04x\nTranspose: %02x\nType: %02x\nDuration (in 60Hz ticks): %d\n", p.init.size, p.init.transpose, p.init.type, p.init.duration);
         std::printf("Freq\tinit: %04x\tKeyon list offset: %04x\tRelease list offset: %04x\n", p.init.init_f_val, p.init.keyon_f_offset, p.init.release_f_offset);
         std::printf("Vol0\tinit: %04x\tKeyon list offset: %04x\tRelease list offset: %04x\n", p.init.init_v0_val, p.init.keyon_v0_offset, p.init.release_v0_offset);
         std::printf("Vol1\tinit: %04x\tKeyon list offset: %04x\tRelease list offset: %04x\n", p.init.init_v1_val, p.init.keyon_v1_offset, p.init.release_v1_offset);

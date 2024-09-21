@@ -192,11 +192,11 @@ bool switch_tvfx_phase(oplStream& opl, int voice) {
     auto& pat = voice_patch[voice]->tv_patchdatastruct;
 
     //designate initial values for the modulator and carrier:
-    S_fbc[voice] = 0;        // FM synth, no feedback
-    S_ksltl_0[voice] = 0;    // volume=full
-    S_ksltl_1[voice] = 0;    // volume=full
-    S_avekm_0[voice] = 0x20; // SUSTAIN=1
-    S_avekm_1[voice] = 0x20; // SUSTAIN=1
+    S_fbc[voice] = 0;        // FM synth, no feedback; feedback comes from time-variant part)
+    S_ksltl_0[voice] = 0;    // volume=zero, ksl=0 (TL will typically come from the time-variant part)
+    S_ksltl_1[voice] = 0;    // volume=zero, ksl=0
+    S_avekm_0[voice] = 0x20; // SUSTAIN=1, AM=0, FM=0, Mult=0 (Mult will typically come from TV part)
+    S_avekm_1[voice] = 0x20; // SUSTAIN=1, AM=0, FM=0, Mult=0
     
     uint8_t timbreType = pat.init.type;
 
@@ -317,7 +317,7 @@ void update_voice(oplStream& opl, int voice) {
     if(tvfx_update[voice] & U_FEEDBACK) {
         uint16_t fb_val = tvfxElements[voice][feedback].value;
         uint8_t FBC = S_fbc[voice];
-        fb_val >>= 4;
+        fb_val >>= 12; // Take the top 4 bits
         fb_val &= 0b1110;
         int fbc = FBC & 1;
         opl.WriteReg(voice_base2[voice] + FB_C, fb_val | fbc);

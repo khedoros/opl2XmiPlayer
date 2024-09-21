@@ -251,9 +251,8 @@ void serve_synth() {
                 S_v0_val[slot] += S_v0_increment[slot];
                 if(S_status[slot] == KEYOFF) {
                     uint16_t newVal = S_v0_val[slot];
-                    if(previous ^ newVal > 0x8000) {
-                        newVal ^= S_v0_increment[slot];
-                        if(newVal < 0x8000) {
+                    if((previous ^ newVal) >= 0x8000) {
+                        if((newVal ^ S_v0_increment[slot]) < 0x8000) {
                             S_v0_val[slot] = 0;
                         }
                     }
@@ -272,9 +271,8 @@ void serve_synth() {
                 S_v1_val[slot] += S_v1_increment[slot];
                 if(S_status[slot] == KEYOFF) {
                     uint16_t newVal = S_v1_val[slot];
-                    if(previous ^ newVal > 0x8000) {
-                        newVal ^= S_v1_increment[slot];
-                        if(newVal < 0x8000) {
+                    if((previous ^ newVal) >= 0x8000) {
+                        if((newVal ^ S_v1_increment[slot]) < 0x8000) {
                             S_v1_val[slot] = 0;
                         }
                     }
