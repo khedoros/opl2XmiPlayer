@@ -275,7 +275,8 @@ bool switch_tvfx_phase(oplStream& opl, int voice) {
     return true;
 }
 
-void update_voice(oplStream& opl, int voice) {
+// Write current TVFX state out to the OPL hardware
+void tvfx_update_voice(oplStream& opl, int voice) {
     if(tvfx_update[voice] & U_MULT0) {
         uint16_t m0_val = tvfxElements[voice][mult0].value;
         uint8_t AVEKM_0 = S_avekm_0[voice];
@@ -333,6 +334,7 @@ void update_voice(oplStream& opl, int voice) {
     }   
 }
 
+// Do the next step in the command list for a specific time-variant element
 bool iterateTvfxCommandList(oplStream& opl, int voice, tvfxOffset element) {
     uw_patch_file::patchdat* patchDat = voice_patch[voice];
     auto& offset = tvfxElements[voice][element].offset;
@@ -393,7 +395,7 @@ bool iterateTvfxCommandList(oplStream& opl, int voice, tvfxOffset element) {
     return valChanged;
 }
 
-// This should be called based on note duration
+// Free a voice from tvfx control when the sound effect has ended
 void tvfx_note_free(oplStream& opl, int voice) {
     voice_midi_num[voice] = -1;
 
@@ -404,16 +406,18 @@ void tvfx_note_free(oplStream& opl, int voice) {
     tvfx_status[voice] = FREE;
 }
 
+// KEYOFF a tvfx effect when duration has been reached
 void tvfx_note_off(oplStream& opl, int voice) {
     std::cout<<"tvfx note-off, voice "<<voice<<"\n";
     tvfx_status[voice] = KEYOFF;
     switch_tvfx_phase(opl, voice);
 }
 
-// Call this at 60Hz
+// Iterate TVFX voices for duration, value increment for each element, and iterate command lists when count hits 0.
+// Also monitors volume for the end of the sound effect. Needs to be called at 60Hz.
 void iterateTvfx(oplStream& opl) {
     for(int voice = 0; voice < OPL_VOICE_COUNT; voice++) {
-        if(voice_patch[voice]->bank != 1 || voice_midi_num[voice] == -1) continue;
+        if(!voice_patch[voice] || voice_patch[voice]->bank != 1 || voice_midi_num[voice] == -1) continue;
         if(tvfx_duration[voice]) {
             tvfx_duration[voice]--;
         }
@@ -459,17 +463,16 @@ void iterateTvfx(oplStream& opl) {
         }
 
         if(tvfx_update[voice] != 0) {
-            update_voice(opl, voice);
+            tvfx_update_voice(opl, voice);
         }
     }
 //serve_synth called at 120Hz, services tvfx at 60Hz, updates priority at 24Hz.
-//For each TVFX slot, decrement all the counters, apply value increments, mark for voice update. If volume == 0 for a slot, TVFX_increment_stage. If anything marked for voice update, update_voice(slot).
+//For each TVFX slot, decrement all the counters, apply value increments, mark for voice update. If volume == 0 for a slot, TVFX_increment_stage. If anything marked for voice update, tvfx_update_voice(slot).
 //If KEYON and duration>0, decrement duration, otherwise, set KEYOFF and run TV_phase(slot).
 //If either volume value is above 0x400, then continue, otherwise release_voice(slot), S_status[slot]=FREE, TVFX_switch_voice()
 }
 
 //Copies the given simple instrument patch data into the given voice slot
-                //OPL voice #, bank #,       instrument patch #
 bool copy_bnk_patch(oplStream& opl, int voice) {
     if(voice == -1 || voice >= OPL_VOICE_COUNT) {
         std::cerr<<"Invalid voice\n";
@@ -526,15 +529,17 @@ void note_off(oplStream& opl, int midi_num) {
     opl.WriteReg(voice_base2[voice_index]+ON_BLK_NUM, (block<<(2)) + ((f_num&0xff00)>>(8)));
 }
 
-void note_on(oplStream& opl, int midi_num, int velocity) {
+void note_on(oplStream& opl, int midi_num, int velocity, uw_patch_file::patchdat* patchDat) {
     if(midi_num < 12 || midi_num > 108) return; // unsupported note range
     int voice_num = find_unused_voice();
     if(voice_num == -1) {
         std::cout<<"No free voice, dropping a note.\n";
         return;
     }
+
     voice_midi_num[voice_num] = midi_num;
     voice_velocity[voice_num] = velocity_translation[velocity>>3];
+    voice_patch[voice_num] = patchDat;
 
     bool retval = false;
     if(voice_patch[voice_num]->bank == 1) {
@@ -578,15 +583,13 @@ std::unordered_map<int, int> keyMap {
     
 };
 
-int write_patches(oplStream& opl, uw_patch_file& uwpf,int bankNum, int patchNum) {
+int update_patch(oplStream& opl, int voice, uw_patch_file& uwpf,int bankNum, int patchNum) {
     for(int p = 0; p < uwpf.bank_data.size(); p++) {//auto& patch: uwpf.bank_data) {
         auto& patch = uwpf.bank_data[p];
         if(patch.bank == bankNum && patch.patch == patchNum) {
-            std::cout<<"Copying "<<bankNum<<":"<<patchNum<<" ("<<patch.name<<") to voice slots\n";
-            for(int i = 0; i < OPL_VOICE_COUNT; i++) {
-                voice_patch[i] = &patch;
-                note_off(opl, voice_midi_num[i]);
-            }
+            std::cout<<"Copying "<<bankNum<<":"<<patchNum<<" ("<<patch.name<<") to voice "<<voice<<"\n";
+            voice_patch[voice] = &patch;
+            note_off(opl, voice_midi_num[voice]);
             return p;
         }
     }
@@ -594,13 +597,11 @@ int write_patches(oplStream& opl, uw_patch_file& uwpf,int bankNum, int patchNum)
     return -1;
 }
 
-int write_patches(oplStream& opl, uw_patch_file& uwpf,int patchIndex) {
+int update_patch(oplStream& opl, int voice, uw_patch_file& uwpf,int patchIndex) {
     auto& patch = uwpf.bank_data[patchIndex % uwpf.bank_data.size()];
-    std::cout<<"Copying "<<int(patch.bank)<<":"<<int(patch.patch)<<"("<<patch.name<<") to voice slots\n";
-    for(int i = 0; i < OPL_VOICE_COUNT; i++) {
-        voice_patch[i] = &patch;
-        note_off(opl, voice_midi_num[i]);
-    }
+    std::cout<<"Copying "<<int(patch.bank)<<":"<<int(patch.patch)<<"("<<patch.name<<") to voice "<<voice<<"\n";
+    voice_patch[voice] = &patch;
+    note_off(opl, voice_midi_num[voice]);
     return patchIndex % uwpf.bank_data.size();
 }
 
@@ -624,10 +625,9 @@ int main(int argc, char* argv[]) {
         patchNum = std::atoi(argv[3]);
     }
 
-    int patchIndex = write_patches(*opl, uwpf, bankNum, patchNum);
+    int patchIndex = update_patch(*opl, 0, uwpf, bankNum, patchNum);
     if(patchIndex == -1) {
         std::cout<<"Patch "<<bankNum<<":"<<patchNum<<" couldn't be loaded. Loading first entry, "<<uwpf.bank_data[0].bank<<":"<<uwpf.bank_data[0].patch<<" instead.\n";
-        write_patches(*opl, uwpf, 0);
         patchIndex = 0;
     }
 
@@ -654,7 +654,7 @@ int main(int argc, char* argv[]) {
                     // std::cout<<"KEYDOWN: "<<event.key.keysym.sym<<'\n';
                     note = keyMap[SDL_GetKeyFromScancode(event.key.keysym.scancode)];
                     if(note > 0 && note < 100) {
-                        note_on(*opl, note, 127);
+                        note_on(*opl, note, 127, &(uwpf.bank_data[patchIndex]));
                         break;
                     }
                     switch(SDL_GetKeyFromScancode(event.key.keysym.scancode)) {
@@ -665,12 +665,14 @@ int main(int argc, char* argv[]) {
                         case SDLK_EQUALS:
                             patchIndex++;
                             patchIndex %= uwpf.bank_data.size();
-                            write_patches(*opl, uwpf, patchIndex);
+                            bankNum = uwpf.bank_data[patchIndex].bank;
+                            patchNum = uwpf.bank_data[patchIndex].patch;
                             break;
                         case SDLK_MINUS:
                             patchIndex--;
                             if(patchIndex < 0) patchIndex = uwpf.bank_data.size() - 1;
-                            write_patches(*opl, uwpf, patchIndex);
+                            bankNum = uwpf.bank_data[patchIndex].bank;
+                            patchNum = uwpf.bank_data[patchIndex].patch;
                             break;
                     }
                 }
