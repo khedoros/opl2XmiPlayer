@@ -23,7 +23,6 @@ void calc_freqs() {
         double diff = 9999999999.0;
         uint8_t blk = 0;
         uint16_t f_num = 0;
-        double OPL_freq = 0.0;
         for(uint32_t block = 0; block < 8; ++block) {
             for(uint32_t f_number = 0; f_number < 1024; ++f_number) {
                 double opl_freq = double(f_number * /*49716*/ NATIVE_OPL_SAMPLE_RATE ) / pow(2.0, 20 - double(block));
@@ -31,7 +30,6 @@ void calc_freqs() {
                     diff = abs(opl_freq - midi_freq);
                     f_num = f_number;
                     blk = block;
-                    OPL_freq = opl_freq;
                 }
             }
         }
@@ -86,47 +84,7 @@ struct tvfxElement {
 };
 
 std::array<std::array<tvfxElement, TVFX_ELEMENT_COUNT>, OPL_VOICE_COUNT> tvfxElements;
-/*
-std::array<uint16_t, OPL_VOICE_COUNT> S_f_offset;
-std::array<uint16_t, OPL_VOICE_COUNT> S_f_counter;
-std::array<uint16_t, OPL_VOICE_COUNT> S_f_val;
-std::array<uint16_t, OPL_VOICE_COUNT> S_f_increment;
 
-std::array<uint16_t, OPL_VOICE_COUNT> S_v0_offset;
-std::array<uint16_t, OPL_VOICE_COUNT> S_v0_counter;
-std::array<uint16_t, OPL_VOICE_COUNT> S_v0_val;
-std::array<uint16_t, OPL_VOICE_COUNT> S_v0_increment;
-
-std::array<uint16_t, OPL_VOICE_COUNT> S_v1_offset;
-std::array<uint16_t, OPL_VOICE_COUNT> S_v1_counter;
-std::array<uint16_t, OPL_VOICE_COUNT> S_v1_val;
-std::array<uint16_t, OPL_VOICE_COUNT> S_v1_increment;
-
-std::array<uint16_t, OPL_VOICE_COUNT> S_p_offset;
-std::array<uint16_t, OPL_VOICE_COUNT> S_p_counter;
-std::array<uint16_t, OPL_VOICE_COUNT> S_p_val;
-std::array<uint16_t, OPL_VOICE_COUNT> S_p_increment;
-
-std::array<uint16_t, OPL_VOICE_COUNT> S_fb_offset;
-std::array<uint16_t, OPL_VOICE_COUNT> S_fb_counter;
-std::array<uint16_t, OPL_VOICE_COUNT> S_fb_val;
-std::array<uint16_t, OPL_VOICE_COUNT> S_fb_increment;
-
-std::array<uint16_t, OPL_VOICE_COUNT> S_m0_offset;
-std::array<uint16_t, OPL_VOICE_COUNT> S_m0_counter;
-std::array<uint16_t, OPL_VOICE_COUNT> S_m0_val;
-std::array<uint16_t, OPL_VOICE_COUNT> S_m0_increment;
-
-std::array<uint16_t, OPL_VOICE_COUNT> S_m1_offset;
-std::array<uint16_t, OPL_VOICE_COUNT> S_m1_counter;
-std::array<uint16_t, OPL_VOICE_COUNT> S_m1_val;
-std::array<uint16_t, OPL_VOICE_COUNT> S_m1_increment;
-
-std::array<uint16_t, OPL_VOICE_COUNT> S_ws_offset;
-std::array<uint16_t, OPL_VOICE_COUNT> S_ws_counter;
-std::array<uint16_t, OPL_VOICE_COUNT> S_ws_val;
-std::array<uint16_t, OPL_VOICE_COUNT> S_ws_increment;
-*/
 std::array<uint8_t, OPL_VOICE_COUNT> S_kbf_shadow; // shadowed KON-BLOCK-FNUM(H) registers
 std::array<uint8_t, OPL_VOICE_COUNT> S_block;      // KON/BLOCK values
 std::array<uint8_t, OPL_VOICE_COUNT> S_fbc;
@@ -335,7 +293,6 @@ void update_voice(oplStream& opl, int voice) {
         uint16_t v0_val = tvfxElements[voice][level0].value;
         v0_val >>= 10; // take the top 6 bits
         v0_val = (~v0_val) & 0x3f;
-        v0_val &= 0x3f;
         v0_val |= KSLTL_0;
         opl.WriteReg(voice_base_mod[voice] + KSL_TL, v0_val);
         tvfx_update[voice] &= (~U_LEVEL0);
@@ -345,7 +302,6 @@ void update_voice(oplStream& opl, int voice) {
         uint16_t v1_val = tvfxElements[voice][level1].value;
         v1_val >>= 10; // take the top 6 bits
         v1_val = (~v1_val) & 0x3f;
-        v1_val &= 0x3f;
         v1_val |= KSLTL_1;
         opl.WriteReg(voice_base_car[voice] + KSL_TL, v1_val);
         tvfx_update[voice] &= (~U_LEVEL1);
@@ -475,13 +431,10 @@ void iterateTvfx(oplStream& opl) {
                 uint16_t previous = tvfxElements[voice][element].value;
                 tvfxElements[voice][element].value += tvfxElements[voice][element].increment;
 
-                if(tvfx_status[voice] && (element == level0 || element == level1)) {
+                if(tvfx_status[voice] == KEYOFF && (element == level0 || element == level1)) {
                     uint16_t newVal = tvfxElements[voice][element].value;
-                    if(previous ^ newVal >= 0x8000) {
-                        newVal ^= (tvfxElements[voice][element].value);
-                        if(newVal < 0x8000) {
-                            tvfxElements[voice][element].value = 0;
-                        }
+                    if((previous ^ newVal) >= 0x8000 && (newVal ^ tvfxElements[voice][element].increment) < 0x8000) {
+                        tvfxElements[voice][element].value = 0;
                     }
                 }
             }

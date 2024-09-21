@@ -4,7 +4,7 @@
 #include<iostream>
 using namespace std;
 
-midi_event::midi_event(uint32_t t, std::vector<uint8_t>& dat) : timestamp(t), data(dat), meta_command(0) {
+midi_event::midi_event(uint32_t t, std::vector<uint8_t>& dat) : meta_command(0), timestamp(t), data(dat) {
     channel = data[0] & 0x0f;
     command = data[0] & 0xf0;
     //cout<<"Midi event: Cmd: "<<hex<<int(command)<<" Time: "<<dec<<timestamp<<endl;
@@ -12,7 +12,7 @@ midi_event::midi_event(uint32_t t, std::vector<uint8_t>& dat) : timestamp(t), da
         meta_command = data[1];
 }
 
-midi_event::midi_event() : timestamp(0), data(0), meta_command(0) {}
+midi_event::midi_event() : meta_command(0), timestamp(0), data(0) {}
 
 uint32_t midi_event::get_time() const {
     return timestamp;

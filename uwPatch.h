@@ -137,7 +137,7 @@ public:
         tvfx_init init;
         tvfx_init_opt opt;
         bool uses_opt;
-        size_t offset;
+        uint16_t offset;
         std::vector<uint16_t> update_data;
     };
 

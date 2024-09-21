@@ -169,7 +169,6 @@ void calc_freqs() {
         double diff = 9999999999.0;
         uint8_t blk = 0;
         uint16_t f_num = 0;
-        double OPL_freq = 0.0;
         for(uint32_t block = 0; block < 8; ++block) {
             for(uint32_t f_number = 0; f_number < 1024; ++f_number) {
                 double opl_freq = double(f_number * /*49716*/ NATIVE_OPL_SAMPLE_RATE ) / pow(2.0, 20 - double(block));
@@ -177,12 +176,10 @@ void calc_freqs() {
                     diff = abs(opl_freq - midi_freq);
                     f_num = f_number;
                     blk = block;
-                    OPL_freq = opl_freq;
                 }
             }
         }
         if(diff < 10) {
-            //cout<<" OPL_Blk: "<<uint16_t(blk)<<" F-Num: "<<f_num<<" OPL Freq: "<<OPL_freq<<'\n';
             freqs.push_back(make_tuple(mid_num,blk,f_num));
         }
         else {
@@ -386,13 +383,10 @@ int main(int argc, char* argv[]) {
     uint8_t midi_num = 0;
     uint8_t midi_velocity = 0;
     uint8_t * midi_data;
-    uint32_t tick_count = xmifile.tick_count();
     int8_t note_index = 0;
 
     uint8_t for_counter[4] = {0};
-    int for_nesting = 0;;
-
-    float lmaxval = 0, lminval = 0, rmaxval = 0, rminval = 0;
+    int for_nesting = 0;
 
     opl->play();
 

@@ -50,8 +50,6 @@ bool load(string fn) {
     vector<uint8_t> reg_trans;
     reg_trans.resize(code_cnt);
     for(auto& code:reg_trans) { infile>>code; }
-    int idx=0;
-    // for(auto code:reg_trans) { cout<<idx<<" is register: "<<int(code)<<'\n';idx++; }
     opl2.play();
     cout<<"Filesize: "<<filesize<<" offset: "<<infile.tellg()<<" pair count: "<<pairs<<'\n';
     for(size_t i = 0; i < pairs; ++i) {
