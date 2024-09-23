@@ -26,42 +26,58 @@ Each of the 8 parameters has 4 variables tracking its state: (1) a current value
 |0002|1|transpose|semitones to transpose the note (not used for tvfx)|
 |0003|1|type|0=OPL2 instrument, 1=TV instrument, 2=TV effect, 3=OPL3 instrument|
 |0004|2|duration|Duration of the effect in 60Hz ticks|
-|Frequency values|
+
+**Frequency values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |0006|2|init_f_val|Value of the frequency at key-on|
 |0008|2|keyon_f_offset|Initial command table offset at key-on|
 |000A|2|release_f_offset|Initial command table offset for key-off|
-|Modulator volume values|
+
+**Modulator volume values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |000C|2|init_v0_val|(The rest follow the same pattern)|
 |000E|2| keyon_v0_offset||
 |0010|2| release_v0_offset||
-|Carrier volume values|
+
+**Carrier volume values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |0012|2|init_v1_val||
 |0014|2|keyon_v1_offset||
 |0016|2|release_v1_offset||
-|Priority values|
+
+**Priority values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |0018|2|init_p_val||
 |001A|2|keyon_p_offset||
 |001C|2|release_p_offset||
-|Feedback values|
+
+**Feedback values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |001E|2|init_fb_val||
 |0020|2|keyon_fb_offset||
 |0022|2|release_fb_offset||
-|Modulator freq multiplier values|
+
+**Modulator freq multiplier values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |0024|2|init_m0_val||
 |0026|2|keyon_m0_offset||
 |0028|2|release_m0_offset||
-|Carrier freq multiplier values|
+
+**Carrier freq multiplier values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |002A|2|init_m1_val||
 |002C|2|keyon_m1_offset||
 |002E|2|release_m1_offset||
-|Waveform select values|
+
+**Waveform select values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |0030|2|init_ws_val||
 |0032|2|keyon_ws_offset||
@@ -71,7 +87,7 @@ Each of the 8 parameters has 4 variables tracking its state: (1) a current value
 
 **Note**: The raw `keyon_f_offset` will be 0x34 if these values aren't present in the struct, and 0x3c if they are.
 
-|Key-On Envelope values|
+**Key-On Envelope values|**
 |Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |0036|1|keyon_sr_1|Carrier keyon sustain and release|
@@ -79,13 +95,16 @@ Each of the 8 parameters has 4 variables tracking its state: (1) a current value
 |0038|1|keyon_sr_0|Modulator keyon sustain and release|
 |0039|1|keyon_ad_0|Modulator keyon attack and decay|
 
-|Key-off envelope values|
+**Key-off envelope values**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |003A|1|release_sr_1|Carrier keyon sustain and release|
 |003B|1|release_ad_1|Carrier keyon attack and decay|
 |003C|1|release_sr_0|Modulator keyon sustain and release|
 |003D|1|release_ad_0|Modulator keyon attack and decay|
-|Frequency values|
+
+**Command List**
+|Offset|Size|Name|Description|
 |:----:|:--:|:--:|:----------|
 |0036/003E|Variable|CommandList|Start of a variable-length list of U16 values|
 
