@@ -584,7 +584,7 @@ std::unordered_map<int, int> keyMap {
 };
 
 int update_patch(oplStream& opl, int voice, uw_patch_file& uwpf,int bankNum, int patchNum) {
-    for(int p = 0; p < uwpf.bank_data.size(); p++) {//auto& patch: uwpf.bank_data) {
+    for(int p = 0; p < uwpf.bank_data.size(); p++) {
         auto& patch = uwpf.bank_data[p];
         if(patch.bank == bankNum && patch.patch == patchNum) {
             std::cout<<"Copying "<<bankNum<<":"<<patchNum<<" ("<<patch.name<<") to voice "<<voice<<"\n";
@@ -667,12 +667,14 @@ int main(int argc, char* argv[]) {
                             patchIndex %= uwpf.bank_data.size();
                             bankNum = uwpf.bank_data[patchIndex].bank;
                             patchNum = uwpf.bank_data[patchIndex].patch;
+                            std::cout<<"Switching to "<<int(bankNum)<<":"<<int(patchNum)<<"("<<uwpf.bank_data[patchIndex].name<<")\n";
                             break;
                         case SDLK_MINUS:
                             patchIndex--;
                             if(patchIndex < 0) patchIndex = uwpf.bank_data.size() - 1;
                             bankNum = uwpf.bank_data[patchIndex].bank;
                             patchNum = uwpf.bank_data[patchIndex].patch;
+                            std::cout<<"Switching to "<<int(bankNum)<<":"<<int(patchNum)<<"("<<uwpf.bank_data[patchIndex].name<<")\n";
                             break;
                     }
                 }
