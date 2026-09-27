@@ -66,6 +66,7 @@ private:
 
     static std::array<int,1024 * 4> logsinTable;
     static std::array<int,256> expTable;
+    inline static bool initedTables = false;
     
     static const int NATIVE_SAMPLE_RATE = 49716;
     static const int envAccumRate = 1'000'000 / OPL_SAMPLE_RATE; // Microseconds per sample

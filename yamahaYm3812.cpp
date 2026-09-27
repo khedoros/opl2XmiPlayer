@@ -384,7 +384,7 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
                             }
                             break;
                         case 2: // Snare Drum
-                            bitComponent = ((carOp->phaseCnt) & (1<9));
+                            bitComponent = ((carOp->phaseCnt) & (1<<9));
                             if(bitComponent && galoisBit) modOut = NEG_MAX; // -max value
                             else if(!bitComponent && !galoisBit) modOut = POS_MAX; // +max value
                             else modOut = POS_ZERO; // zero value
@@ -424,6 +424,9 @@ void YamahaYm3812::Update(int16_t* buffer, int sampleCnt) {
 }
 
 void YamahaYm3812::initTables() {
+    if(initedTables) {
+        return;
+    }
     for (int i = 0; i < 256; ++i) {
         logsinTable[i] = round(-log2(sin((double(i) + 0.5) * M_PI_2 / 256.0)) * 256.0);
         logsinTable[511 - i] = logsinTable[i];
@@ -451,6 +454,7 @@ void YamahaYm3812::initTables() {
         }
 
     }
+    initedTables = true;
 }
 
 int YamahaYm3812::lookupSin(int val, int wf) {
